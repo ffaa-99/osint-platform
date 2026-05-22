@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OSINT Platform</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+<div class="osint-layout">
+
+<aside class="sidebar">
+
+<div class="brand">
+<div class="brand-icon"></div>
+
+<div>
+<h2>OSINT</h2>
+<span>PLATFORM</span>
+</div>
+
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-table-columns"></i>
+Dashboard
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-magnifying-glass"></i>
+Username Search
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-link"></i>
+URL Analyzer
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-share-nodes"></i>
+Social Search
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-bookmark"></i>
+Saved Results
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-file-lines"></i>
+Reports
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-bell"></i>
+Alerts
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-code"></i>
+API Access
+</div>
+
+<div class="side-bottom">
+
+<div class="nav-item">
+<i class="fa-solid fa-gear"></i>
+Settings
+</div>
+
+<div class="nav-item">
+<i class="fa-solid fa-circle-question"></i>
+Help Center
+</div>
+
+</div>
+
+</aside>
+
+<main class="main-panel">
+
+<div class="globe-bg"></div>
+
+
+<section class="hero">
+
+<h1>
+OSINT
+<span>PLATFORM</span>
+</h1>
+
+<p>
+
+Advanced Intelligence • Social Media Search • URL Analyzer
+
+</p>
+
+</section>
+
+
+<form method="post" action="/" class="search-module">
+
+<div class="search-types">
+
+<input type="hidden" id="search_type" name="search_type" value="username">
+
+<button type="button" class="type-btn active"
+onclick="setType(this,'username')">
+Username
+</button>
+
+<button type="button" class="type-btn"
+onclick="setType(this,'email')">
+Email
+</button>
+
+<button type="button" class="type-btn"
+onclick="setType(this,'phone')">
+Phone
+</button>
+
+<button type="button" class="type-btn"
+onclick="setType(this,'domain')">
+Domain
+</button>
+
+</div>
+
+<div class="search-row">
+
+<input
+type="text"
+name="username"
+placeholder="Enter target..."
+required
+>
+
+<button id="search-btn" type="submit">
+
+<i class="fa-solid fa-magnifying-glass"></i>
+
+Search
+
+</button>
+
+</div>
+
+
+</form>
+
+
+<div class="scan-status">
+
+<div class="scan-line"></div>
+
+<div id="scan-text">
+
+INITIALIZING INTELLIGENCE MODULES...
+
+</div>
+
+</div>
+
+
+{% if username %}
+
+<div class="intel-bar">
+
+<span>OSINT ENGINE: ACTIVE</span>
+
+<span>TARGET: {{ username }}</span>
+
+<span>
+
+STATUS:
+
+{% if search_type=="email" %}
+EMAIL INTELLIGENCE DETECTED
+
+{% elif search_type=="phone" %}
+PHONE INTELLIGENCE DETECTED
+
+{% elif search_type=="domain" %}
+DOMAIN INTELLIGENCE DETECTED
+
+{% else %}
+DIGITAL FOOTPRINT DETECTED
+
+{% endif %}
+
+</span>
+
+</div>
+
+{% endif %}
+
+
+{% if results %}
+<a class="pdf-btn"
+href="/report?target={{ username }}&search_type={{ search_type }}"
+target="_blank">
+
+Export PDF Report
+
+</a>
+
+<div class="results-grid">
+
+{% for item in results %}
+
+<div class="card">
+
+<div class="card-top">
+
+<h3>{{ item.site }}</h3>
+
+<span class="{% if item.status == 'FOUND' %}badge-found{% else %}badge-notfound{% endif %}">
+{{ item.status }}
+</span>
+
+</div>
+
+<p class="confidence">
+
+Confidence:
+{{ item.confidence }}%
+—
+{{ item.label }}
+
+</p>
+
+{% if item.url != "#" and item.status == "FOUND" %}
+<a href="{{ item.url }}"
+class="open-btn"
+target="_blank">
+Open Profile
+</a>
+{% else %}
+<span class="no-profile">
+No external profile
+</span>
+{% endif %}
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% endif %}
+
+</main>
+
+</div>
+
+<script>
+
+const scanMessagesByType = {
+    username: [
+        "SCANNING SOCIAL PLATFORMS...",
+        "CHECKING USERNAME SIGNALS...",
+        "ANALYZING DIGITAL FOOTPRINT...",
+        "BUILDING INTELLIGENCE VIEW..."
+    ],
+    email: [
+        "VALIDATING EMAIL STRUCTURE...",
+        "CHECKING EMAIL DOMAIN...",
+        "ANALYZING EMAIL INTELLIGENCE...",
+        "BUILDING EMAIL REPORT..."
+    ],
+    phone: [
+        "VALIDATING PHONE FORMAT...",
+        "CHECKING COUNTRY CODE...",
+        "ANALYZING PHONE INTELLIGENCE...",
+        "BUILDING PHONE REPORT..."
+    ],
+    domain: [
+        "VALIDATING DOMAIN STRUCTURE...",
+        "CHECKING DNS RECORDS...",
+        "SCANNING DOMAIN INTELLIGENCE...",
+        "BUILDING DOMAIN REPORT..."
+    ]
+};
+
+let scanIndex = 0;
+
+const scanText = document.getElementById("scan-text");
+const searchTypeInput = document.getElementById("search_type");
+
+if (scanText && searchTypeInput) {
+    setInterval(() => {
+        const currentType = searchTypeInput.value || "username";
+        const messages = scanMessagesByType[currentType] || scanMessagesByType.username;
+
+        scanIndex = (scanIndex + 1) % messages.length;
+        scanText.textContent = messages[scanIndex];
+
+    }, 1800);
+}
+
+function setType(btn,type){
+
+    document.getElementById("search_type").value = type;
+
+    document
+    .querySelectorAll(".type-btn")
+    .forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+
+    scanIndex = 0;
+
+    if (scanText) {
+        const messages = scanMessagesByType[type] || scanMessagesByType.username;
+        scanText.textContent = messages[0];
+    }
+}
+
+</script>
+</body>
+</html>
