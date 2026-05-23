@@ -21,10 +21,7 @@ body{
     justify-content:center;
     align-items:flex-start;
     padding-top:0;
-    background:
-    radial-gradient(circle at 85% 20%,
-    rgba(0,150,255,.10),
-    transparent 30%);
+    background:transparent;
 }
 
 .header {
@@ -657,9 +654,7 @@ color:#ffffff;
 font-family:Arial,sans-serif;
 min-height:100vh;
 
-background:
-radial-gradient(circle at top right,rgba(0,90,255,.25),
-transparent 30%),#04122b;
+
 }
 
 .brand-icon{
@@ -1301,4 +1296,170 @@ background:#091c3b;
 border:1px solid rgba(125,211,252,.15);
 box-shadow:none;
 color:#dbeafe;
+}
+
+/* ===== OSINT SPACE FILL FIX ===== */
+
+.main-panel{
+position:relative!important;
+overflow:hidden;
+}
+
+/* خريطة/شبكة وهمية بالنصف السفلي */
+
+.main-panel::after{
+
+content:"";
+
+position:absolute;
+
+left:50%;
+bottom:-40px;
+
+transform:translateX(-50%);
+
+width:95%;
+height:420px;
+
+opacity:.30;
+
+pointer-events:none;
+
+background:
+
+radial-gradient(circle at center,
+rgba(0,191,255,.18),
+transparent 60%),
+
+repeating-linear-gradient(
+90deg,
+transparent,
+transparent 39px,
+rgba(0,191,255,.05) 40px
+),
+
+repeating-linear-gradient(
+0deg,
+transparent,
+transparent 39px,
+rgba(0,191,255,.05) 40px
+);
+
+border-radius:50%;
+
+filter:blur(1px);
+
+}
+
+/* دوائر رادار خفيفة */
+
+.main-panel .bg-radar{
+
+position:absolute;
+
+left:50%;
+top:180px;
+
+transform:translateX(-50%);
+
+width:1200px;
+height:1200px;
+
+opacity:.10;
+
+z-index:0;
+
+pointer-events:none;
+
+border-radius:50%;
+
+border:1px solid rgba(0,191,255,.05);
+
+animation:bgPulse 10s infinite;
+
+}
+
+.main-panel .bg-radar::before,
+.main-panel .bg-radar::after{
+
+content:"";
+
+position:absolute;
+
+border-radius:50%;
+
+border:1px solid rgba(0,191,255,.05);
+
+}
+
+.main-panel .bg-radar::before{
+inset:120px;
+}
+
+.main-panel .bg-radar::after{
+inset:240px;
+}
+
+.hero,
+.search-module,
+.scan-status,
+.results-grid,
+.intel-bar{
+
+position:relative;
+z-index:2;
+
+}
+@keyframes bgPulse{
+
+0%{
+transform:scale(.95);
+opacity:.4;
+}
+
+50%{
+transform:scale(1);
+opacity:1;
+}
+
+100%{
+transform:scale(.95);
+opacity:.4;
+}
+
+}
+
+/* ===== WORLD MAP FINAL ===== */
+
+.main-panel .bg-radar{
+display:none !important;
+}
+
+.main-panel::after{
+
+content:"" !important;
+
+position:absolute !important;
+
+left:50% !important;
+
+bottom:20px !important;
+
+transform:translateX(-50%) !important;
+
+width:90% !important;
+
+height:420px !important;
+
+background:url("/static/images/world-map.png")
+center/contain no-repeat !important;
+
+opacity:.22 !important;
+
+filter:drop-shadow(
+0 0 20px rgba(0,191,255,.12)
+);
+
+pointer-events:none !important;
+
 }

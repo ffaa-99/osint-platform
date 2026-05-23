@@ -243,6 +243,29 @@ app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="stati
 
 REPORTS_DIR = BASE_DIR / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
+# حذف ملفات التقارير القديمة إذا تعدت 24 ساعة
+
+from datetime import timedelta
+
+def cleanup_reports():
+
+    now = datetime.now()
+
+    for file in REPORTS_DIR.glob("*"):
+
+        try:
+
+            age = now - datetime.fromtimestamp(
+                file.stat().st_mtime
+            )
+
+            if age > timedelta(hours=24):
+                file.unlink()
+
+        except:
+            pass
+
+cleanup_reports()
 
 SOCIAL_PLATFORMS = [
     {"site": "Instagram", "url": "https://www.instagram.com/{}/"},
@@ -253,16 +276,20 @@ SOCIAL_PLATFORMS = [
     {"site": "Telegram", "url": "https://t.me/{}"},
 ]
 
-def cleanup_root_txt(username: str):
+def cleanup_root_txt():
     for file in BASE_DIR.glob("*.txt"):
-        if file.name.lower() == f"{username.lower()}.txt":
-            try:
-                file.unlink()
-            except:
-                pass
+        try:
+            file.unlink()
+        except Exception:
+            pass
 
 def run_sherlock(username: str):
     found = {}
+
+    REPORTS_DIR.mkdir(exist_ok=True)
+
+    # تنظيف أي ملفات txt قديمة من جذر المشروع
+    cleanup_root_txt()
 
     command = [
         "python",
@@ -289,47 +316,54 @@ def run_sherlock(username: str):
         output = (process.stdout or "") + "\n" + (process.stderr or "")
 
         for line in output.splitlines():
+            for platform in SOCIAL_PLATFORMS:
+                site = platform["site"]
 
-            urls = re.findall(r"https?://[^\s]+", line)
+                if site.lower() in line.lower() and (
+                    "http://" in line or
+                    "https://" in line
+                ):
+                    urls = re.findall(
+                        r"https?://[^\s]+",
+                        line
+                    )
 
-            for url in urls:
-
-                clean = url.lower()
-
-                if username.lower() not in clean:
-                    continue
-
-                if "instagram.com" in clean:
-                    found["Instagram"] = url
-
-                elif "tiktok.com" in clean:
-                    found["TikTok"] = url
-
-                elif "github.com" in clean:
-                    found["GitHub"] = url
-
-                elif "reddit.com" in clean:
-                    found["Reddit"] = url
-
-                elif "youtube.com" in clean:
-                    found["YouTube"] = url
-
-                elif "twitter.com" in clean or "x.com" in clean:
-                    found["Twitter"] = url
-
-                elif "linkedin.com" in clean:
-                    found["LinkedIn"] = url
-
-                elif "t.me" in clean:
-                    found["Telegram"] = url
-
-                elif "snapchat.com" in clean:
-                    found["Snapchat"] = url
+                    if urls:
+                        found[site] = urls[0].strip()
 
     except Exception:
         pass
 
-    cleanup_root_txt(username)
+    # تنظيف أي ملفات ينشئها Sherlock بعد التشغيل
+    cleanup_root_txt()
+
+    report_file = REPORTS_DIR / f"{username}.txt"
+
+    if report_file.exists():
+        try:
+            content = report_file.read_text(
+                encoding="utf-8",
+                errors="ignore"
+            )
+
+            for line in content.splitlines():
+                for platform in SOCIAL_PLATFORMS:
+                    site = platform["site"]
+
+                    if site.lower() in line.lower() and (
+                        "http://" in line or
+                        "https://" in line
+                    ):
+                        urls = re.findall(
+                            r"https?://[^\s]+",
+                            line
+                        )
+
+                        if urls:
+                            found[site] = urls[0].strip()
+
+        except Exception:
+            pass
 
     return found
 
