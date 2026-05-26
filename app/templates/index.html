@@ -2,323 +2,297 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OSINT Platform</title>
 <link rel="stylesheet" href="/static/css/style.css">
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+#search-btn.searching { opacity:0.7; cursor:not-allowed; pointer-events:none; }
+#searching-msg { display:none; text-align:center; font-size:12px; letter-spacing:1.5px; color:var(--text3); margin-top:10px; }
+#searching-msg.active { display:block; }
+
+#suggestions-box {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  z-index: 999;
+  background: var(--bg2, #1a1c28);
+  border: 1px solid var(--border-md, #2e3147);
+  border-radius: 12px;
+  padding: 6px 0;
+  box-sizing: border-box;
+}
+#suggestions-box .sug-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text3, #5a5f7a);
+  padding: 4px 14px 6px;
+  text-transform: uppercase;
+}
+#suggestions-box .sug-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#suggestions-box .sug-item:hover {
+  background: var(--bg3, #22253a);
+}
+#suggestions-box .sug-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--bg3, #22253a);
+  color: var(--text3, #5a5f7a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+#suggestions-box .sug-text {
+  font-size: 14px;
+  color: var(--text, #c8cce0);
+  flex: 1;
+}
+#suggestions-box .sug-sub {
+  font-size: 11px;
+  color: var(--text3, #5a5f7a);
+  margin-top: 1px;
+}
+#suggestions-box .sug-clear {
+  font-size: 11px;
+  color: var(--text3, #5a5f7a);
+  padding: 6px 14px 2px;
+  text-align: right;
+  cursor: pointer;
+  border-top: 1px solid var(--border, #22253a);
+  margin-top: 4px;
+}
+#suggestions-box .sug-clear:hover {
+  color: var(--accent, #4f6ef7);
+}
+</style>
 </head>
-
 <body>
-
 <div class="osint-layout">
 
-<aside class="sidebar">
-
-<div class="brand">
-<div class="brand-icon"></div>
-
-<div>
-<h2>OSINT</h2>
-<span>PLATFORM</span>
-</div>
-
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-table-columns"></i>
-Dashboard
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-magnifying-glass"></i>
-Username Search
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-link"></i>
-URL Analyzer
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-share-nodes"></i>
-Social Search
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-bookmark"></i>
-Saved Results
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-file-lines"></i>
-Reports
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-bell"></i>
-Alerts
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-code"></i>
-API Access
-</div>
-
-<div class="side-bottom">
-
-<div class="nav-item">
-<i class="fa-solid fa-gear"></i>
-Settings
-</div>
-
-<div class="nav-item">
-<i class="fa-solid fa-circle-question"></i>
-Help Center
-</div>
-
-</div>
-
-</aside>
-
-<main class="main-panel">
-
-<div class="bg-radar"></div>
-
-<div class="globe-bg"></div>
-
-<section class="hero">
-
-<h1>
-OSINT
-<span>PLATFORM</span>
-</h1>
-
-<p>
-
-Advanced Intelligence • Social Media Search • URL Analyzer
-
-</p>
-
-</section>
-
-
-<form method="post" action="/" class="search-module">
-
-<div class="search-types">
-
-<input type="hidden" id="search_type" name="search_type" value="username">
-
-<button type="button" class="type-btn active"
-onclick="setType(this,'username')">
-Username
-</button>
-
-<button type="button" class="type-btn"
-onclick="setType(this,'email')">
-Email
-</button>
-
-<button type="button" class="type-btn"
-onclick="setType(this,'phone')">
-Phone
-</button>
-
-<button type="button" class="type-btn"
-onclick="setType(this,'domain')">
-Domain
-</button>
-
-</div>
-
-<div class="search-row">
-
-<input
-type="text"
-name="username"
-placeholder="Enter target..."
-required
->
-
-<button id="search-btn" type="submit">
-
-<i class="fa-solid fa-magnifying-glass"></i>
-
-Search
-
-</button>
-
-</div>
-
-
-</form>
-
-
-<div class="scan-status">
-
-<div class="scan-line"></div>
-
-<div id="scan-text">
-
-INITIALIZING INTELLIGENCE MODULES...
-
-</div>
-
-</div>
-
-{% if username %}
-
-<div class="intel-bar">
-
-<span>OSINT ENGINE: ACTIVE</span>
-
-<span>TARGET: {{ username }}</span>
-
-<span>
-
-STATUS:
-
-{% if search_type=="email" %}
-EMAIL INTELLIGENCE DETECTED
-
-{% elif search_type=="phone" %}
-PHONE INTELLIGENCE DETECTED
-
-{% elif search_type=="domain" %}
-DOMAIN INTELLIGENCE DETECTED
-
-{% else %}
-DIGITAL FOOTPRINT DETECTED
-
-{% endif %}
-
-</span>
-
-</div>
-
-{% endif %}
-
-
-{% if results %}
-<a class="pdf-btn"
-href="/report?target={{ username }}&search_type={{ search_type }}"
-target="_blank">
-
-Export PDF Report
-
-</a>
-
-<div class="results-grid">
-
-{% for item in results %}
-
-<div class="card">
-
-<div class="card-top">
-
-<h3>{{ item.site }}</h3>
-
-<span class="{% if item.status == 'FOUND' %}badge-found{% else %}badge-notfound{% endif %}">
-{{ item.status }}
-</span>
-
-</div>
-
-<p class="confidence">
-
-Confidence:
-{{ item.confidence }}%
-—
-{{ item.label }}
-
-</p>
-
-{% if item.url != "#" and item.status == "FOUND" %}
-<a href="{{ item.url }}"
-class="open-btn"
-target="_blank">
-Open Profile
-</a>
-{% else %}
-<span class="no-profile">
-No external profile
-</span>
-{% endif %}
-
-</div>
-
-{% endfor %}
-
-</div>
-
-{% endif %}
-
-</main>
-
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon"></div>
+      <div><h2>OSINT</h2><span>PLATFORM</span></div>
+    </div>
+    <span class="nav-section">Main</span>
+    <div class="nav-item active"><i class="fa-solid fa-table-columns"></i> Dashboard</div>
+    <div class="nav-item"><i class="fa-solid fa-magnifying-glass"></i> Username Search</div>
+    <div class="nav-item"><i class="fa-solid fa-link"></i> URL Analyzer</div>
+    <div class="nav-item"><i class="fa-solid fa-share-nodes"></i> Social Search</div>
+    <div class="nav-item" onclick="location.href='/saved'"><i class="fa-solid fa-bookmark"></i> Saved Results</div>
+    <span class="nav-section">System</span>
+    <div class="nav-item"><i class="fa-solid fa-file-lines"></i> Reports</div>
+    <div class="nav-item"><i class="fa-solid fa-bell"></i> Alerts</div>
+    <div class="nav-item"><i class="fa-solid fa-code"></i> API Access</div>
+    <div class="side-bottom">
+      <div class="nav-item"><i class="fa-solid fa-gear"></i> Settings</div>
+      <div class="nav-item"><i class="fa-solid fa-circle-question"></i> Help Center</div>
+    </div>
+  </aside>
+
+  <main class="main-panel">
+    <section class="hero">
+      <h1>OSINT <span>PLATFORM</span></h1>
+      <p>Intelligence · Social Search · URL Analyzer</p>
+    </section>
+
+   <form method="post" action="/" class="search-module" id="search-form">
+      <input type="hidden" id="search_type" name="search_type" value="username">
+      <div class="search-types">
+        <button type="button" class="type-btn active" onclick="setType(this,'username')"><i class="fa-solid fa-user" style="margin-right:6px;font-size:12px;"></i>Username</button>
+        <button type="button" class="type-btn" onclick="setType(this,'email')"><i class="fa-solid fa-envelope" style="margin-right:6px;font-size:12px;"></i>Email</button>
+        <button type="button" class="type-btn" onclick="setType(this,'phone')"><i class="fa-solid fa-phone" style="margin-right:6px;font-size:12px;"></i>Phone</button>
+        <button type="button" class="type-btn" onclick="setType(this,'domain')"><i class="fa-solid fa-globe" style="margin-right:6px;font-size:12px;"></i>Domain</button>
+      </div>
+      <div class="search-row" style="position:relative;">
+        <input type="text" name="username" id="search-input" placeholder="Enter target..." required autocomplete="off">
+        <button id="search-btn" type="submit">
+          <i class="fa-solid fa-magnifying-glass" id="search-icon"></i> <span id="search-label">Search</span>
+        </button>
+        <div id="suggestions-box"></div>
+      </div>
+      <div id="searching-msg">SCANNING PLATFORMS...</div>
+    </form>
+
+    <div class="scan-status">
+      <div class="scan-line"></div>
+      <span id="scan-text">ANALYZING DIGITAL FOOTPRINT...</span>
+    </div>
+
+    {% if username %}
+    <div class="intel-bar">
+      <span>⬤ ENGINE: ACTIVE</span>
+      <span>TARGET: {{ username }}</span>
+      <span>{% if search_type == "email" %}EMAIL INTELLIGENCE{% elif search_type == "phone" %}PHONE INTELLIGENCE{% elif search_type == "domain" %}DOMAIN INTELLIGENCE{% else %}DIGITAL FOOTPRINT DETECTED{% endif %}</span>
+    </div>
+    {% endif %}
+
+    {% if results %}
+    <div style="display:flex;align-items:center;justify-content:space-between;max-width:700px;margin:0 auto;width:100%;gap:12px;">
+      <div style="display:flex;gap:10px;">
+        <div style="background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:8px;padding:8px 18px;font-size:13px;color:var(--green);font-weight:600;"><i class="fa-solid fa-circle-check" style="margin-right:6px;"></i>{{ found_count }} Found</div>
+        <div style="background:var(--red-bg);border:1px solid var(--red-bdr);border-radius:8px;padding:8px 18px;font-size:13px;color:var(--red);font-weight:600;"><i class="fa-solid fa-circle-xmark" style="margin-right:6px;"></i>{{ notfound_count }} Not Found</div>
+      </div>
+      <a class="pdf-btn" href="/report?target={{ username }}&search_type={{ search_type }}" target="_blank">Export PDF Report</a>
+    </div>
+    <div class="results-grid">
+      {% for item in results %}
+      <div class="card">
+        <div class="card-top">
+          <h3>{{ item.site }}</h3>
+          <span class="{% if item.status == 'FOUND' %}badge-found{% else %}badge-notfound{% endif %}">{{ item.status }}</span>
+        </div>
+        <div class="conf-bar"><div class="conf-fill" style="width:{{ item.confidence }}%;"></div></div>
+        <p class="confidence"><strong style="color:var(--text);font-weight:600;">{{ item.confidence }}%</strong> confidence — {{ item.label }}</p>
+        {% if item.url != "#" and item.status == "FOUND" %}
+          <a href="{{ item.url }}" class="open-btn" target="_blank">Open Profile</a>
+        {% else %}
+          <span class="no-profile">No external profile</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if report and report.enabled %}
+    <div style="max-width:700px;margin:0 auto;width:100%;background:var(--bg2);border:1px solid var(--border-md);border-radius:var(--radius-lg);padding:24px;">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;color:var(--text);"><i class="fa-solid fa-link" style="color:var(--accent);margin-right:8px;"></i>URL Analysis</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;letter-spacing:1px;">PAGE TITLE</div>
+          <div style="font-size:14px;color:var(--text);">{{ report.title }}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;letter-spacing:1px;">LINKS FOUND</div>
+          <div style="font-size:22px;font-weight:600;color:var(--accent);">{{ report.links }}</div>
+        </div>
+      </div>
+      {% if report.keywords %}
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--text3);letter-spacing:1px;margin-bottom:8px;">KEYWORDS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          {% for kw in report.keywords %}<span style="font-size:12px;background:var(--bg3);color:var(--text2);padding:3px 10px;border-radius:999px;border:1px solid var(--border);">{{ kw }}</span>{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% if report.preview %}
+      <div style="font-size:12.5px;color:var(--text3);line-height:1.7;background:var(--bg3);border-radius:8px;padding:12px;max-height:100px;overflow:hidden;">{{ report.preview }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </main>
 </div>
 
 <script>
-
-const scanMessagesByType = {
-    username: [
-        "SCANNING SOCIAL PLATFORMS...",
-        "CHECKING USERNAME SIGNALS...",
-        "ANALYZING DIGITAL FOOTPRINT...",
-        "BUILDING INTELLIGENCE VIEW..."
-    ],
-    email: [
-        "VALIDATING EMAIL STRUCTURE...",
-        "CHECKING EMAIL DOMAIN...",
-        "ANALYZING EMAIL INTELLIGENCE...",
-        "BUILDING EMAIL REPORT..."
-    ],
-    phone: [
-        "VALIDATING PHONE FORMAT...",
-        "CHECKING COUNTRY CODE...",
-        "ANALYZING PHONE INTELLIGENCE...",
-        "BUILDING PHONE REPORT..."
-    ],
-    domain: [
-        "VALIDATING DOMAIN STRUCTURE...",
-        "CHECKING DNS RECORDS...",
-        "SCANNING DOMAIN INTELLIGENCE...",
-        "BUILDING DOMAIN REPORT..."
-    ]
+const scanMessages = {
+  username: ["SCANNING SOCIAL PLATFORMS...","VERIFYING USERNAME SIGNALS...","ANALYZING DIGITAL FOOTPRINT...","BUILDING INTELLIGENCE VIEW..."],
+  email:    ["VALIDATING EMAIL STRUCTURE...","CHECKING EMAIL DOMAIN...","ANALYZING EMAIL INTELLIGENCE...","BUILDING EMAIL REPORT..."],
+  phone:    ["VALIDATING PHONE FORMAT...","CHECKING COUNTRY CODE...","ANALYZING PHONE INTELLIGENCE...","BUILDING PHONE REPORT..."],
+  domain:   ["VALIDATING DOMAIN STRUCTURE...","CHECKING DNS RECORDS...","SCANNING DOMAIN INTELLIGENCE...","BUILDING DOMAIN REPORT..."]
 };
+let idx = 0;
+const scanText = document.getElementById('scan-text');
+const typeInput = document.getElementById('search_type');
+setInterval(() => {
+  const type = typeInput.value || 'username';
+  const msgs = scanMessages[type] || scanMessages.username;
+  idx = (idx + 1) % msgs.length;
+  if (scanText) scanText.textContent = msgs[idx];
+}, 1800);
 
-let scanIndex = 0;
-
-const scanText = document.getElementById("scan-text");
-const searchTypeInput = document.getElementById("search_type");
-
-if (scanText && searchTypeInput) {
-    setInterval(() => {
-        const currentType = searchTypeInput.value || "username";
-        const messages = scanMessagesByType[currentType] || scanMessagesByType.username;
-
-        scanIndex = (scanIndex + 1) % messages.length;
-        scanText.textContent = messages[scanIndex];
-
-    }, 1800);
+function setType(btn, type) {
+  typeInput.value = type;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  idx = 0;
+  if (scanText) scanText.textContent = (scanMessages[type] || scanMessages.username)[0];
+  const placeholders = { username:'Enter username...', email:'Enter email address...', phone:'Enter phone number (+966...)', domain:'Enter domain (example.com)' };
+  const inp = document.getElementById('search-input');
+  if (inp) inp.placeholder = placeholders[type] || 'Enter target...';
 }
 
-function setType(btn,type){
+// ─── Recent Searches ───────────────────────────────────────────
+const STORAGE_KEY = 'osint_recent';
+const sugInput = document.getElementById('search-input');
+const sugBox   = document.getElementById('suggestions-box');
 
-    document.getElementById("search_type").value = type;
-
-    document
-    .querySelectorAll(".type-btn")
-    .forEach(b => b.classList.remove("active"));
-
-    btn.classList.add("active");
-
-    scanIndex = 0;
-
-    if (scanText) {
-        const messages = scanMessagesByType[type] || scanMessagesByType.username;
-        scanText.textContent = messages[0];
-    }
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
 }
 
+function saveRecent(val) {
+  let list = getRecent().filter(x => x.value !== val);
+  list.unshift({ value: val, date: Date.now() });
+  list = list.slice(0, 5);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+function clearRecent() {
+  localStorage.removeItem(STORAGE_KEY);
+  sugBox.style.display = 'none';
+}
+
+function timeAgo(ts) {
+  const diff = Math.floor((Date.now() - ts) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return '1 day ago';
+  return diff + ' days ago';
+}
+
+function showRecent() {
+  const list = getRecent();
+  if (!list.length) { sugBox.style.display = 'none'; return; }
+  sugBox.innerHTML =
+    '<div class="sug-label">Recent</div>' +
+    list.map(r =>
+      `<div class="sug-item" onclick="pickRecent('${r.value.replace(/'/g,"\\'")}')">
+        <div class="sug-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <div>
+          <div class="sug-text">${r.value}</div>
+          <div class="sug-sub">${timeAgo(r.date)}</div>
+        </div>
+      </div>`
+    ).join('') +
+    '<div class="sug-clear" onclick="clearRecent()">Clear history</div>';
+  sugBox.style.display = 'block';
+}
+
+function pickRecent(val) {
+  sugInput.value = val;
+  sugBox.style.display = 'none';
+}
+
+sugInput.addEventListener('focus', showRecent);
+
+document.addEventListener('click', function(e) {
+  if (!sugBox.contains(e.target) && e.target !== sugInput)
+    sugBox.style.display = 'none';
+});
+
+// ─── Form Submit ────────────────────────────────────────────────
+document.getElementById('search-form').addEventListener('submit', function() {
+  const target = sugInput.value.trim();
+  if (!target) return;
+  saveRecent(target);
+  document.getElementById('search-btn').classList.add('searching');
+  document.getElementById('search-icon').className = 'fa-solid fa-spinner fa-spin';
+  document.getElementById('search-label').textContent = 'Searching...';
+  document.getElementById('searching-msg').classList.add('active');
+});
 </script>
 </body>
 </html>

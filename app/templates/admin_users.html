@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSINT — إدارة المستخدمين</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:#0a0a0f; color:#e2e8f0; min-height:100vh; padding:32px; }
+  h1 { color:#fff; font-size:20px; font-weight:600; margin-bottom:4px; }
+  .sub { color:rgba(255,255,255,0.35); font-size:13px; margin-bottom:32px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  .card { background:rgba(15,15,25,0.9); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:24px; }
+  .card-title { color:rgba(255,255,255,0.6); font-size:12px; letter-spacing:1px; margin-bottom:18px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { color:rgba(255,255,255,0.3); font-weight:500; padding:8px 12px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.06); }
+  td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.04); color:rgba(255,255,255,0.75); }
+  tr:last-child td { border:none; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; }
+  .badge-admin { background:rgba(99,102,241,0.15); color:#a5b4fc; }
+  .badge-user  { background:rgba(34,197,94,0.1);  color:#86efac; }
+  label { display:block; color:rgba(255,255,255,0.45); font-size:12px; margin-bottom:6px; margin-top:14px; }
+  label:first-of-type { margin-top:0; }
+  input, select {
+    width:100%; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1);
+    border-radius:8px; padding:10px 12px; color:#fff; font-size:13px; outline:none;
+    transition:border-color 0.2s; direction:ltr;
+  }
+  input:focus, select:focus { border-color:rgba(59,130,246,0.5); }
+  select option { background:#1a1a2e; }
+  .btn { padding:9px 18px; border-radius:8px; border:none; font-size:13px; cursor:pointer; transition:opacity 0.2s; }
+  .btn-primary { background:linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; margin-top:16px; width:100%; }
+  .btn-danger  { background:rgba(239,68,68,0.15); color:#fca5a5; border:1px solid rgba(239,68,68,0.2); }
+  .btn:hover { opacity:0.85; }
+  .back { display:inline-flex; align-items:center; gap:6px; color:rgba(255,255,255,0.4); font-size:13px; text-decoration:none; margin-bottom:24px; }
+  .back:hover { color:rgba(255,255,255,0.7); }
+  .sessions-list { display:flex; flex-direction:column; gap:8px; }
+  .session-item { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px 14px; font-size:12px; }
+  .session-user { color:#fff; font-weight:500; margin-bottom:2px; }
+  .session-exp  { color:rgba(255,255,255,0.3); }
+  .dot { width:7px; height:7px; border-radius:50%; background:#22c55e; display:inline-block; margin-left:6px; }
+</style>
+</head>
+<body>
+
+<a href="/" class="back">← رجوع للمنصة</a>
+
+<h1>إدارة المستخدمين</h1>
+<p class="sub">مرحباً {{ current_user.username }} — صلاحية Admin</p>
+
+<div class="grid">
+
+  <!-- جدول المستخدمين -->
+  <div class="card">
+    <div class="card-title">المستخدمون المسجلون</div>
+    <table>
+      <thead>
+        <tr>
+          <th>اسم المستخدم</th>
+          <th>الدور</th>
+          <th>تاريخ الإنشاء</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user.username }}</td>
+          <td>
+            <span class="badge {% if user.role == 'admin' %}badge-admin{% else %}badge-user{% endif %}">
+              {{ user.role }}
+            </span>
+          </td>
+          <td>{{ user.created_at[:10] }}</td>
+          <td>
+            {% if user.username != 'admin' %}
+            <form method="post" action="/admin/users/delete" style="display:inline">
+              <input type="hidden" name="username" value="{{ user.username }}">
+              <button type="submit" class="btn btn-danger" onclick="return confirm('حذف {{ user.username }}؟')">حذف</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- إضافة مستخدم -->
+  <div class="card">
+    <div class="card-title">إضافة مستخدم جديد</div>
+    <form method="post" action="/admin/users/create">
+      <label>اسم المستخدم</label>
+      <input type="text" name="new_username" placeholder="username" required>
+      <label>كلمة المرور</label>
+      <input type="password" name="new_password" placeholder="••••••••" required>
+      <label>الدور</label>
+      <select name="role">
+        <option value="user">user — مستخدم عادي</option>
+        <option value="admin">admin — مدير</option>
+      </select>
+      <button type="submit" class="btn btn-primary">إضافة المستخدم</button>
+    </form>
+  </div>
+
+  <!-- تغيير كلمة المرور -->
+  <div class="card">
+    <div class="card-title">تغيير كلمة مرور</div>
+    <form method="post" action="/admin/users/change-password">
+      <label>اسم المستخدم</label>
+      <select name="username">
+        {% for user in users %}
+        <option value="{{ user.username }}">{{ user.username }}</option>
+        {% endfor %}
+      </select>
+      <label>كلمة المرور الجديدة</label>
+      <input type="password" name="new_password" placeholder="••••••••" required>
+      <button type="submit" class="btn btn-primary">تغيير كلمة المرور</button>
+    </form>
+  </div>
+
+  <!-- الجلسات النشطة -->
+  <div class="card">
+    <div class="card-title">الجلسات النشطة حالياً</div>
+    {% if sessions %}
+    <div class="sessions-list">
+      {% for s in sessions %}
+      <div class="session-item">
+        <div class="session-user"><span class="dot"></span>{{ s.username }} ({{ s.role }})</div>
+        <div class="session-exp">تنتهي: {{ s.expires_at[:16].replace('T', ' ') }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:rgba(255,255,255,0.2);font-size:13px">لا توجد جلسات نشطة</p>
+    {% endif %}
+  </div>
+
+</div>
+</body>
+</html>

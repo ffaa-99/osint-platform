@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Saved Results</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="osint-layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon"></div>
+      <div><h2>OSINT</h2><span>PLATFORM</span></div>
+    </div>
+    <span class="nav-section">Main</span>
+    <div class="nav-item" onclick="location.href='/'"><i class="fa-solid fa-table-columns"></i> Dashboard</div>
+    <div class="nav-item active"><i class="fa-solid fa-bookmark"></i> Saved Results</div>
+    <div class="side-bottom">
+      <div class="nav-item"><i class="fa-solid fa-gear"></i> Settings</div>
+    </div>
+  </aside>
+  <main class="main-panel">
+    <section class="hero">
+      <h1>SAVED <span>RESULTS</span></h1>
+      <p>Previous searches stored in database</p>
+    </section>
+    {% if searches %}
+    <div style="max-width:700px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:12px;">
+    {% for s in searches %}
+      <div style="background:var(--bg2);border:1px solid var(--border-md);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:40px;height:40px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-user" style="color:var(--accent);"></i>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);">{{ s.target }}</div>
+            <div style="font-size:12px;color:var(--text3);">{{ s.search_type | upper }} · {{ s.created_at }}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span style="background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:6px;padding:4px 12px;font-size:12px;color:var(--green);font-weight:600;">{{ s.found_count }} Found</span>
+          <a href="/report?target={{ s.target }}&search_type={{ s.search_type }}" target="_blank" style="background:var(--bg3);border:1px solid var(--border-md);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--text2);text-decoration:none;">PDF</a>
+        </div>
+      </div>
+    {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:60px;color:var(--text3);">
+      <i class="fa-solid fa-database" style="font-size:40px;display:block;margin-bottom:16px;"></i>
+      <p>No saved searches yet</p>
+    </div>
+    {% endif %}
+  </main>
+</div>
+</body>
+</html>
