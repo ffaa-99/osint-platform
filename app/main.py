@@ -1,14 +1,16 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Request, Form, Depends
+from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-import subprocess
 import re
 import requests
+import random
+import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import os
@@ -20,6 +22,8 @@ from app.auth import (
     get_current_user
 )
 
+# ─────────────────────────────────────────
+# PDF GENERATOR
 # ─────────────────────────────────────────
 # PDF GENERATOR
 # ─────────────────────────────────────────
@@ -150,458 +154,683 @@ def generate_pdf_report(target, search_type, results):
 # ─────────────────────────────────────────
 # APP SETUP
 # ─────────────────────────────────────────
-app=FastAPI()
-BASE_DIR=Path(__file__).resolve().parent.parent
-APP_DIR=Path(__file__).resolve().parent
-templates=Jinja2Templates(directory=str(APP_DIR/"templates"))
-app.mount("/static",StaticFiles(directory=str(APP_DIR/"static")),name="static")
-REPORTS_DIR=BASE_DIR/"reports"
+app = FastAPI()
+BASE_DIR  = Path(__file__).resolve().parent.parent
+APP_DIR   = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
+REPORTS_DIR = BASE_DIR / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
 
 def cleanup_reports():
-    now=datetime.now()
+    now = datetime.now()
     for file in REPORTS_DIR.glob("*"):
         try:
-            if now-datetime.fromtimestamp(file.stat().st_mtime)>timedelta(hours=24): file.unlink()
-        except Exception: pass
+            if now - datetime.fromtimestamp(file.stat().st_mtime) > timedelta(hours=24):
+                file.unlink()
+        except Exception:
+            pass
 cleanup_reports()
 
-HEADERS={
-    "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-    "Accept-Language":"en-US,en;q=0.9",
+# ─────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
+]
+
+# المنصات + طريقة الفحص لكل واحدة
+SOCIAL_PLATFORMS = [
+    {"site": "Instagram",   "url": "https://www.instagram.com/{}/",       "method": "http"},
+    {"site": "Twitter",     "url": "https://x.com/{}",                    "method": "api"},
+    {"site": "Snapchat",    "url": "https://www.snapchat.com/add/{}",     "method": "http"},
+    {"site": "Facebook",    "url": "https://www.facebook.com/{}",         "method": "http"},
+    {"site": "GitHub",      "url": "https://github.com/{}",               "method": "api"},
+    {"site": "YouTube",     "url": "https://www.youtube.com/@{}",         "method": "http"},
+    {"site": "LinkedIn",    "url": "https://www.linkedin.com/in/{}/",     "method": "http"},
+    {"site": "Telegram",    "url": "https://t.me/{}",                     "method": "http"},
+    {"site": "TikTok",      "url": "https://www.tiktok.com/@{}",          "method": "http"},
+    {"site": "Reddit",      "url": "https://www.reddit.com/user/{}",      "method": "api"},
+    {"site": "Pastebin",    "url": "https://pastebin.com/u/{}",           "method": "http"},
+    {"site": "Gravatar",    "url": "https://gravatar.com/{}",             "method": "api"},
+]
+
+# إشارات "مو موجود" لكل منصة
+NOT_FOUND_SIGNALS = {
+    "Instagram":  ["page not found", "sorry, this page", "pagenotfound"],
+    "Twitter":    ["this account doesn't exist", "account suspended", "page doesn't exist", "sorry, that page doesn't exist", "this account has been suspended"],
+    "Snapchat":   ["page not found", "no user found", "this page"],
+    "Facebook":   ["page not found", "content not found", "this page isn't available", "this content isn't available", "this page isn't available right now", "المحتوى غير متوفر"],
+    "YouTube":    ["404", "page not found", "this page is not available"],
+    "LinkedIn":   ["page not found", "this page doesn't exist", "profile not found"],
+    "Telegram":   ["page not found", "if you have telegram"],
+    "TikTok":     ["couldn't find this account", "page not found", "user not found"],
+    "Reddit":     ["page not found", "nobody on reddit goes by that name"],
+    "GitHub":     ["not found", "page not found"],
+    "Pastebin":   ["not found", "unknown user", "no pastes"],
 }
 
-SOCIAL_PLATFORMS=[
-    {"site":"Instagram","url":"https://www.instagram.com/{}/"},
-    {"site":"Twitter","url":"https://x.com/{}"},
-    {"site":"Snapchat","url":"https://www.snapchat.com/add/{}"},
-    {"site":"Facebook","url":"https://www.facebook.com/{}"},
-    {"site":"GitHub","url":"https://github.com/{}"},
-    {"site":"YouTube","url":"https://www.youtube.com/@{}"},
-    {"site":"LinkedIn","url":"https://www.linkedin.com/in/{}/"},
-    {"site":"Telegram","url":"https://t.me/{}"},
-    {"site":"TikTok","url":"https://www.tiktok.com/@{}"},
-    {"site":"Reddit","url":"https://www.reddit.com/user/{}"},
-]
-DIRECT_CHECK_SITES={"Twitter","Snapchat","Facebook","Instagram","TikTok","Reddit"}
-NOT_FOUND_SIGNALS=["page not found","user not found","sorry, this page","doesn't exist",
-    "account suspended","isn't available","this account doesn't exist","no results",
-    "profile not found","sorry, this","page does not exist"]
+# إشارات "موجود" — أدق من مجرد 200
+FOUND_SIGNALS = {
+    "Instagram":  ["og:type", "profile", "followers"],
+    "Twitter":    ["og:title", "twitter:title", "tweets"],
+    "Snapchat":   ["snapcode", "bitmoji", "add me on snapchat"],
+    "Facebook":   ["og:title", "timeline", "fb_dtsg"],
+    "YouTube":    ["subscriberCountText", "channelId", "subscribers"],
+    "LinkedIn":   ["og:title", "experience", "linkedin"],
+    "Telegram":   ["tgme_page", "tgme_page_title", "telegram"],
+    "TikTok":     ["uniqueId", "followerCount", "tiktok"],
+    "Reddit":     ["totalKarma", "created", "redditor"],
+    "GitHub":     ["repositories", "followers", "contributions"],
+    "Pastebin":   ["public pastes", "pastebin", "recent pastes"],
+}
 
 
-# ═══════════════════════════════════════════════════════
-# أدوات مجانية
-# ═══════════════════════════════════════════════════════
+# ─────────────────────────────────────────
+# APIs مجانية — دقيقة 100%
+# ─────────────────────────────────────────
+def api_check_twitter(username):
+    # نستخدم nitter كـ proxy مفتوح المصدر — أدق من x.com مباشرة
+    mirrors = [
+        f"https://nitter.poast.org/{username}",
+        f"https://nitter.privacydev.net/{username}",
+    ]
+    headers = {"User-Agent": random.choice(USER_AGENTS)}
+    for url in mirrors:
+        try:
+            r = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+            if r.status_code == 404:
+                return False, 0, ""
+            if r.status_code == 200:
+                body = r.text.lower()
+                not_found = ["user not found", "no results", "this account doesn't exist"]
+                if any(s in body for s in not_found):
+                    return False, 0, ""
+                if "tweets" in body or "following" in body or "followers" in body:
+                    return True, 90, "Twitter/X Profile Detected"
+        except Exception:
+            continue
+    return False, 0, ""
+
+
+def api_check_github(username):
+    try:
+        r = requests.get(
+            f"https://api.github.com/users/{username}",
+            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "OSINT-Platform"},
+            timeout=8
+        )
+        if r.status_code == 200:
+            d = r.json()
+            parts = []
+            if d.get("name"):      parts.append(d["name"])
+            if d.get("location"):  parts.append(f"📍 {d['location']}")
+            if d.get("public_repos"): parts.append(f"{d['public_repos']} repos")
+            if d.get("followers"): parts.append(f"{d['followers']} followers")
+            if d.get("email"):     parts.append(f"✉ {d['email']}")
+            label = " | ".join(parts) if parts else "Developer Profile"
+            return True, 98, label
+        return False, 0, ""
+    except Exception:
+        return False, 0, ""
+
+def api_check_reddit(username):
+    try:
+        r = requests.get(
+            f"https://www.reddit.com/user/{username}/about.json",
+            headers={"User-Agent": "OSINT-Platform/2.0"},
+            timeout=8
+        )
+        if r.status_code == 200:
+            d = r.json().get("data", {})
+            karma   = d.get("total_karma", 0)
+            created = datetime.fromtimestamp(d.get("created_utc", 0)).strftime("%Y-%m-%d")
+            label   = f"Karma: {karma:,} | Joined: {created}"
+            return True, 95, label
+        return False, 0, ""
+    except Exception:
+        return False, 0, ""
+
+    except Exception:
+        return False, 0, ""
+
+def api_check_gravatar(username):
+    try:
+        email_hash = hashlib.md5(username.lower().strip().encode()).hexdigest()
+        r = requests.get(
+            f"https://www.gravatar.com/{email_hash}.json",
+            headers={"User-Agent": "OSINT-Platform"},
+            timeout=8
+        )
+        if r.status_code == 200:
+            d = r.json().get("entry", [{}])[0]
+            label = "Gravatar Profile Found"
+            if d.get("displayName"): label += f" — {d['displayName']}"
+            if d.get("currentLocation"): label += f" | 📍 {d['currentLocation']}"
+            accounts = [a.get("name","") for a in d.get("accounts", [])[:3]]
+            if accounts: label += f" | Linked: {', '.join(accounts)}"
+            profile_url = d.get("profileUrl", f"https://gravatar.com/{username}")
+            return True, 92, label, profile_url
+        return False, 0, "", ""
+    except Exception:
+        return False, 0, "", ""
+
+
+# ─────────────────────────────────────────
+# HTTP Check — لكل المنصات الأخرى
+# ─────────────────────────────────────────
+def http_check(site, url):
+    headers = {
+        "User-Agent":      random.choice(USER_AGENTS),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer":         "https://www.google.com/",
+    }
+    try:
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+
+        # 404 = مو موجود قطعاً
+        if r.status_code == 404:
+            return False, 0, ""
+
+        # المنصة محجبت الطلب — نتجاهل بدل false positive
+        if r.status_code in [401, 403, 429, 999]:
+            return False, 0, ""
+
+        if r.status_code == 200:
+            body = r.text.lower()
+
+            # فحص negative أولاً
+            for sig in NOT_FOUND_SIGNALS.get(site, []):
+                if sig in body:
+                    return False, 0, ""
+
+            # فحص positive
+            pos = FOUND_SIGNALS.get(site, [])
+            if pos:
+                hits = sum(1 for s in pos if s in body)
+                if hits >= 1:
+                    conf = min(60 + hits * 10, 95)
+                    return True, conf, "Public Profile Detected"
+                return False, 0, ""
+
+            return True, 75, "Public Profile Detected"
+
+    except Exception:
+        pass
+    return False, 0, ""
+
+
+# ─────────────────────────────────────────
+# فحص منصة واحدة
+# ─────────────────────────────────────────
+def check_platform(p, username):
+    site   = p["site"]
+    url    = p["url"].format(username)
+    method = p["method"]
+
+    # skip = Facebook وأمثاله يعيدون توجيه لنتائج خاطئة — نعطي رابط فقط
+    if method == "skip":
+        return {
+            "site": site, "url": url,
+            "status": "NOT FOUND", "confidence": 0,
+            "label": "فحص يدوي مطلوب — اضغط الرابط للتحقق",
+            "source": "Manual Check Required",
+        }
+
+    if method == "api":
+        if site == "Twitter":
+            found, conf, label = api_check_twitter(username)
+        elif site == "GitHub":
+            found, conf, label = api_check_github(username)
+        elif site == "Reddit":
+            found, conf, label = api_check_reddit(username)
+        elif site == "Gravatar":
+            result = api_check_gravatar(username)
+            found, conf, label = result[0], result[1], result[2]
+            if found and result[3]:
+                url = result[3]
+        else:
+            found, conf, label = False, 0, ""
+    else:
+        found, conf, label = http_check(site, url)
+
+    if not label and found:
+        label = "Public Presence Detected"
+
+    return {
+        "site":       site,
+        "url":        url,
+        "status":     "FOUND" if found else "NOT FOUND",
+        "confidence": conf,
+        "label":      label if found else "No Public Evidence Found",
+        "source":     "OSINT Direct",
+    }
+
+
+# ─────────────────────────────────────────
+# EMAIL CHAINING — يربط الهوية تلقائياً
+# ─────────────────────────────────────────
+def chain_email_intel(email, source_site):
+    chain_results = []
+    if not email or "@" not in email:
+        return chain_results
+    domain = email.split("@")[-1].lower()
+
+    # Gravatar
+    try:
+        email_hash = hashlib.md5(email.lower().strip().encode()).hexdigest()
+        r = requests.get(f"https://www.gravatar.com/{email_hash}.json",
+                         headers={"User-Agent": "OSINT-Platform"}, timeout=6)
+        if r.status_code == 200:
+            d = r.json().get("entry", [{}])[0]
+            label = f"🔗 Email: {email}"
+            if d.get("displayName"):      label += f" | Name: {d['displayName']}"
+            if d.get("currentLocation"):  label += f" | 📍 {d['currentLocation']}"
+            accounts = [a.get("name","") for a in d.get("accounts",[])[:3]]
+            if accounts: label += f" | Linked: {', '.join(accounts)}"
+            chain_results.append({
+                "site": "Gravatar (Auto-Chain)",
+                "url": f"https://www.gravatar.com/avatar/{email_hash}",
+                "status": "FOUND", "confidence": 92,
+                "label": label, "source": f"Chained from {source_site}",
+            })
+    except Exception:
+        pass
+
+    # HIBP
+    hibp_key = os.getenv("HIBP_API_KEY")
+    if hibp_key:
+        try:
+            r = requests.get(
+                f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
+                headers={"hibp-api-key": hibp_key, "User-Agent": "OSINT-Platform"},
+                params={"truncateResponse": "false"}, timeout=10)
+            if r.status_code == 200:
+                breaches = r.json()
+                names = ", ".join(b.get("Name","") for b in breaches[:4])
+                chain_results.append({
+                    "site": "HIBP (Auto-Chain)",
+                    "url": "https://haveibeenpwned.com/",
+                    "status": "FOUND", "confidence": 95,
+                    "label": f"🔗 Email: {email} | ⚠ {len(breaches)} تسريب: {names}",
+                    "source": f"Chained from {source_site}",
+                })
+            elif r.status_code == 404:
+                chain_results.append({
+                    "site": "HIBP (Auto-Chain)",
+                    "url": "https://haveibeenpwned.com/",
+                    "status": "FOUND", "confidence": 90,
+                    "label": f"🔗 Email: {email} | ✅ لا تسريبات",
+                    "source": f"Chained from {source_site}",
+                })
+        except Exception:
+            pass
+
+    # Email Domain Info
+    try:
+        r = requests.get(f"https://dns.google/resolve?name={domain}&type=MX",
+                         headers={"User-Agent": "OSINT-Platform"}, timeout=6)
+        if r.status_code == 200:
+            answers = r.json().get("Answer", [])
+            if answers:
+                mx = answers[0].get("data","")
+                chain_results.append({
+                    "site": "Email Domain (Auto-Chain)",
+                    "url": f"https://who.is/whois/{domain}",
+                    "status": "FOUND", "confidence": 85,
+                    "label": f"🔗 Domain: {domain} | MX: {mx[:50]}",
+                    "source": f"Chained from {source_site}",
+                })
+    except Exception:
+        pass
+
+    return chain_results
+
+
+# ─────────────────────────────────────────
+# BUILD USERNAME RESULTS — متوازي + Chaining
+# ─────────────────────────────────────────
+def build_results(username):
+    results_map = {}
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        futures = {executor.submit(check_platform, p, username): p for p in SOCIAL_PLATFORMS}
+        for future in as_completed(futures, timeout=20):
+            try:
+                result = future.result()
+                results_map[result["site"]] = result
+            except Exception:
+                p = futures[future]
+                results_map[p["site"]] = {
+                    "site": p["site"], "url": p["url"].format(username),
+                    "status": "NOT FOUND", "confidence": 0,
+                    "label": "No Public Evidence Found", "source": "OSINT Direct",
+                }
+
+    # Email Chaining من GitHub
+    chained = []
+    github_result = results_map.get("GitHub", {})
+    if github_result.get("status") == "FOUND":
+        label = github_result.get("label", "")
+        email_match = re.search(r"✉\s*([\w\.\-]+@[\w\.\-]+\.\w+)", label)
+        if email_match:
+            chained = chain_email_intel(email_match.group(1), "GitHub")
+
+    # النتائج الأساسية + Chained
+    final = [results_map.get(p["site"], {
+        "site": p["site"], "url": p["url"].format(username),
+        "status": "NOT FOUND", "confidence": 0,
+        "label": "No Public Evidence Found", "source": "OSINT Direct",
+    }) for p in SOCIAL_PLATFORMS]
+
+    if chained:
+        final.extend(chained)
+
+    return final
+
+
+# ─────────────────────────────────────────
+# أدوات مساعدة
+# ─────────────────────────────────────────
 def lookup_ip(ip):
     try:
-        r=requests.get(f"https://ipapi.co/{ip}/json/",headers={"User-Agent":"OSINT-Platform"},timeout=10)
-        if r.status_code==200:
-            d=r.json()
+        r = requests.get(f"https://ipapi.co/{ip}/json/", headers={"User-Agent": "OSINT-Platform"}, timeout=8)
+        if r.status_code == 200:
+            d = r.json()
             if "error" not in d:
-                return {"ip":d.get("ip",ip),"country":d.get("country_name","Unknown"),
-                    "city":d.get("city","Unknown"),"region":d.get("region","Unknown"),
-                    "org":d.get("org","Unknown"),"timezone":d.get("timezone","Unknown"),
-                    "latitude":d.get("latitude",0),"longitude":d.get("longitude",0)}
-    except Exception: pass
+                return {"ip": d.get("ip", ip), "country": d.get("country_name", "Unknown"),
+                        "city": d.get("city", "Unknown"), "region": d.get("region", "Unknown"),
+                        "org": d.get("org", "Unknown"), "timezone": d.get("timezone", "Unknown"),
+                        "latitude": d.get("latitude", 0), "longitude": d.get("longitude", 0)}
+    except Exception:
+        pass
     return {}
 
 def get_subdomains(domain):
-    subdomains=set()
+    subdomains = set()
     try:
-        r=requests.get(f"https://crt.sh/?q=%.{domain}&output=json",headers={"User-Agent":"OSINT-Platform"},timeout=15)
-        if r.status_code==200:
+        r = requests.get(f"https://crt.sh/?q=%.{domain}&output=json", headers={"User-Agent": "OSINT-Platform"}, timeout=12)
+        if r.status_code == 200:
             for entry in r.json()[:50]:
-                for sub in entry.get("name_value","").split("\n"):
-                    sub=sub.strip().lower()
-                    if sub.endswith(f".{domain}") and "*" not in sub: subdomains.add(sub)
-    except Exception: pass
+                for sub in entry.get("name_value", "").split("\n"):
+                    sub = sub.strip().lower()
+                    if sub.endswith(f".{domain}") and "*" not in sub:
+                        subdomains.add(sub)
+    except Exception:
+        pass
     return sorted(list(subdomains))[:20]
 
 def check_wayback(domain):
     try:
-        r=requests.get(f"http://archive.org/wayback/available?url={domain}",headers={"User-Agent":"OSINT-Platform"},timeout=10)
-        if r.status_code==200:
-            snap=r.json().get("archived_snapshots",{}).get("closest",{})
+        r = requests.get(f"http://archive.org/wayback/available?url={domain}", headers={"User-Agent": "OSINT-Platform"}, timeout=8)
+        if r.status_code == 200:
+            snap = r.json().get("archived_snapshots", {}).get("closest", {})
             if snap.get("available"):
-                ts=snap.get("timestamp","")
-                return {"available":True,"url":snap.get("url",""),
-                    "date":f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}" if len(ts)>=8 else ts}
-    except Exception: pass
-    return {"available":False}
+                ts = snap.get("timestamp", "")
+                return {"available": True, "url": snap.get("url", ""),
+                        "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}" if len(ts) >= 8 else ts}
+    except Exception:
+        pass
+    return {"available": False}
 
 def dns_lookup(domain):
-    results={}
-    for rtype in ["A","MX","TXT","NS","AAAA"]:
+    results = {}
+    for rtype in ["A", "MX", "TXT", "NS"]:
         try:
-            r=requests.get(f"https://dns.google/resolve?name={domain}&type={rtype}",headers={"User-Agent":"OSINT-Platform"},timeout=8)
-            if r.status_code==200:
-                answers=r.json().get("Answer",[])
-                if answers: results[rtype]=[a.get("data","") for a in answers[:5]]
-        except Exception: pass
+            r = requests.get(f"https://dns.google/resolve?name={domain}&type={rtype}",
+                             headers={"User-Agent": "OSINT-Platform"}, timeout=6)
+            if r.status_code == 200:
+                answers = r.json().get("Answer", [])
+                if answers:
+                    results[rtype] = [a.get("data", "") for a in answers[:5]]
+        except Exception:
+            pass
     return results
 
 def search_urlscan(domain):
     try:
-        r=requests.get(f"https://urlscan.io/api/v1/search/?q=domain:{domain}&size=5",headers={"User-Agent":"OSINT-Platform"},timeout=10)
-        if r.status_code==200:
-            rl=r.json().get("results",[])
+        r = requests.get(f"https://urlscan.io/api/v1/search/?q=domain:{domain}&size=5",
+                         headers={"User-Agent": "OSINT-Platform"}, timeout=8)
+        if r.status_code == 200:
+            rl = r.json().get("results", [])
             if rl:
-                latest=rl[0]
-                return {"found":True,"total":r.json().get("total",0),
-                    "last_scan":latest.get("task",{}).get("time",""),
-                    "scan_url":f"https://urlscan.io/result/{latest.get('task',{}).get('uuid','')}/",
-                    "country":latest.get("page",{}).get("country",""),
-                    "server":latest.get("page",{}).get("server",""),
-                    "ip":latest.get("page",{}).get("ip","")}
-    except Exception: pass
-    return {"found":False}
-
-def get_github_info(username):
-    try:
-        r=requests.get(f"https://api.github.com/users/{username}",
-            headers={"User-Agent":"OSINT-Platform","Accept":"application/vnd.github.v3+json"},timeout=10)
-        if r.status_code==200:
-            d=r.json()
-            repos_info=[]
-            try:
-                rr=requests.get(f"https://api.github.com/users/{username}/repos?sort=stars&per_page=5",
-                    headers={"User-Agent":"OSINT-Platform"},timeout=8)
-                if rr.status_code==200:
-                    repos_info=[{"name":x["name"],"stars":x["stargazers_count"],"lang":x.get("language","")} for x in rr.json()[:5]]
-            except Exception: pass
-            return {"found":True,"name":d.get("name",""),"bio":d.get("bio",""),
-                "location":d.get("location",""),"company":d.get("company",""),
-                "repos":d.get("public_repos",0),"followers":d.get("followers",0),
-                "following":d.get("following",0),"created_at":d.get("created_at","")[:10],
-                "blog":d.get("blog",""),"email":d.get("email",""),
-                "avatar":d.get("avatar_url",""),"top_repos":repos_info}
-    except Exception: pass
-    return {"found":False}
-
-def get_reddit_info(username):
-    try:
-        r=requests.get(f"https://www.reddit.com/user/{username}/about.json",
-            headers={"User-Agent":"OSINT-Platform/1.0"},timeout=10)
-        if r.status_code==200:
-            d=r.json().get("data",{})
-            created=datetime.fromtimestamp(d.get("created_utc",0)).strftime("%Y-%m-%d")
-            posts=[]
-            try:
-                pr=requests.get(f"https://www.reddit.com/user/{username}/submitted.json?limit=5",
-                    headers={"User-Agent":"OSINT-Platform/1.0"},timeout=8)
-                if pr.status_code==200:
-                    for p in pr.json().get("data",{}).get("children",[])[:3]:
-                        pd=p.get("data",{})
-                        posts.append({"title":pd.get("title","")[:60],"subreddit":pd.get("subreddit","")})
-            except Exception: pass
-            return {"found":True,"karma":d.get("total_karma",0),"link_karma":d.get("link_karma",0),
-                "comment_karma":d.get("comment_karma",0),"created_at":created,
-                "is_gold":d.get("is_gold",False),"verified":d.get("verified",False),"recent_posts":posts}
-    except Exception: pass
-    return {"found":False}
+                latest = rl[0]
+                return {"found": True, "total": r.json().get("total", 0),
+                        "last_scan": latest.get("task", {}).get("time", ""),
+                        "scan_url": f"https://urlscan.io/result/{latest.get('task', {}).get('uuid', '')}/",
+                        "country": latest.get("page", {}).get("country", ""),
+                        "server": latest.get("page", {}).get("server", ""),
+                        "ip": latest.get("page", {}).get("ip", "")}
+    except Exception:
+        pass
+    return {"found": False}
 
 def check_gravatar(email):
-    import hashlib
     try:
-        email_hash=hashlib.md5(email.lower().strip().encode()).hexdigest()
-        r=requests.get(f"https://www.gravatar.com/{email_hash}.json",headers={"User-Agent":"OSINT-Platform"},timeout=8)
-        if r.status_code==200:
-            d=r.json().get("entry",[{}])[0]
-            return {"found":True,"display_name":d.get("displayName",""),
-                "profile_url":d.get("profileUrl",""),
-                "avatar_url":f"https://www.gravatar.com/avatar/{email_hash}",
-                "about_me":d.get("aboutMe",""),"location":d.get("currentLocation",""),
-                "accounts":[a.get("name","") for a in d.get("accounts",[])[:5]]}
-    except Exception: pass
-    return {"found":False}
-
-
-# ─────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────
-def cleanup_root_txt():
-    for file in BASE_DIR.glob("*.txt"):
-        try: file.unlink()
-        except Exception: pass
-
-def run_sherlock(username):
-    found={}; REPORTS_DIR.mkdir(exist_ok=True); cleanup_root_txt()
-    sherlock_sites=[p for p in SOCIAL_PLATFORMS if p["site"] not in DIRECT_CHECK_SITES]
-    command=["python","-m","sherlock_project",username,"--print-found","--folderoutput",str(REPORTS_DIR)]
-    for p in sherlock_sites: command.extend(["--site",p["site"]])
-    try:
-        process=subprocess.run(command,cwd=str(BASE_DIR),capture_output=True,text=True,timeout=90)
-        output=(process.stdout or "")+"\n"+(process.stderr or "")
-        for line in output.splitlines():
-            for p in sherlock_sites:
-                site=p["site"]
-                if site.lower() in line.lower() and ("http://" in line or "https://" in line):
-                    urls=re.findall(r"https?://[^\s]+",line)
-                    if urls: found[site]=urls[0].strip()
-    except Exception: pass
-    cleanup_root_txt()
-    report_file=REPORTS_DIR/f"{username}.txt"
-    if report_file.exists():
-        try:
-            content=report_file.read_text(encoding="utf-8",errors="ignore")
-            for line in content.splitlines():
-                for p in sherlock_sites:
-                    site=p["site"]
-                    if site.lower() in line.lower() and ("http://" in line or "https://" in line):
-                        urls=re.findall(r"https?://[^\s]+",line)
-                        if urls: found[site]=urls[0].strip()
-        except Exception: pass
-    return found
-
-def direct_check(username,found):
-    for p in SOCIAL_PLATFORMS:
-        site=p["site"]
-        if site not in DIRECT_CHECK_SITES or site in found: continue
-        url=p["url"].format(username)
-        try:
-            r=requests.get(url,headers=HEADERS,timeout=12,allow_redirects=True)
-            if r.status_code==404: continue
-            if r.status_code==200:
-                if any(sig in r.text.lower() for sig in NOT_FOUND_SIGNALS): continue
-                found[site]=url
-        except Exception: continue
-    return found
+        email_hash = hashlib.md5(email.lower().strip().encode()).hexdigest()
+        r = requests.get(f"https://www.gravatar.com/{email_hash}.json", headers={"User-Agent": "OSINT-Platform"}, timeout=6)
+        if r.status_code == 200:
+            d = r.json().get("entry", [{}])[0]
+            return {"found": True, "display_name": d.get("displayName", ""),
+                    "profile_url": d.get("profileUrl", ""),
+                    "avatar_url": f"https://www.gravatar.com/avatar/{email_hash}",
+                    "about_me": d.get("aboutMe", ""), "location": d.get("currentLocation", ""),
+                    "accounts": [a.get("name", "") for a in d.get("accounts", [])[:5]]}
+    except Exception:
+        pass
+    return {"found": False}
 
 def analyze_url(url):
     try:
-        r=requests.get(url,headers={"User-Agent":"Mozilla/5.0"},timeout=15)
-        soup=BeautifulSoup(r.text,"html.parser")
-        title=soup.title.string.strip() if soup.title else "No title"
-        text=soup.get_text(separator=" ",strip=True); words=text.split()
-        return {"enabled":True,"title":title,"links":len(soup.find_all("a")),"preview":text[:700],"keywords":list(dict.fromkeys(words[:18]))}
+        r = requests.get(url, headers={"User-Agent": random.choice(USER_AGENTS)}, timeout=12)
+        soup = BeautifulSoup(r.text, "html.parser")
+        title = soup.title.string.strip() if soup.title else "No title"
+        text = soup.get_text(separator=" ", strip=True)
+        words = text.split()
+        return {"enabled": True, "title": title, "links": len(soup.find_all("a")),
+                "preview": text[:700], "keywords": list(dict.fromkeys(words[:18]))}
     except Exception as e:
-        return {"enabled":True,"title":"Error","links":0,"preview":str(e),"keywords":[]}
+        return {"enabled": True, "title": "Error", "links": 0, "preview": str(e), "keywords": []}
 
 
-# ═══════════════════════════════════════════════════════
-# BUILD RESULTS
-# ═══════════════════════════════════════════════════════
-def build_results(username):
-    results=[]; found=run_sherlock(username); found=direct_check(username,found)
-    github_info=get_github_info(username) if "GitHub" in found else {"found":False}
-    reddit_info=get_reddit_info(username) if "Reddit" in found else {"found":False}
-    for p in SOCIAL_PLATFORMS:
-        site=p["site"]
-        if site in found:
-            url=found[site].lower(); conf=85; label="Public Presence Detected"
-            if "github.com" in url:
-                conf=98
-                if github_info.get("found"):
-                    g=github_info; parts=[]
-                    if g.get("name"):      parts.append(g["name"])
-                    if g.get("location"):  parts.append(f"📍 {g['location']}")
-                    if g.get("repos"):     parts.append(f"{g['repos']} repos")
-                    if g.get("followers"): parts.append(f"{g['followers']} followers")
-                    if g.get("email"):     parts.append(f"✉ {g['email']}")
-                    label=" | ".join(parts) if parts else "Developer Profile Detected"
-                else: label="Developer Profile Detected"
-            elif "linkedin.com" in url: conf,label=92,"Professional Presence Confirmed"
-            elif "t.me" in url:         conf,label=88,"Messaging Profile Detected"
-            elif "snapchat.com" in url: conf,label=90,"Snapchat Profile Detected"
-            elif "facebook.com" in url: conf,label=88,"Facebook Profile Detected"
-            elif "reddit.com" in url:
-                conf=90
-                if reddit_info.get("found"):
-                    r=reddit_info
-                    label=f"Karma: {r['karma']:,} | Joined: {r['created_at']}"
-                    if r.get("recent_posts"):
-                        subs=list(set(p["subreddit"] for p in r["recent_posts"]))
-                        label+=f" | r/{', r/'.join(subs[:3])}"
-                else: label="Confirmed Public Presence"
-            elif any(x in url for x in ["instagram","tiktok","youtube","x.com","twitter"]):
-                conf,label=95,"Confirmed Public Presence"
-            results.append({"site":site,"url":found[site],"status":"FOUND","confidence":conf,"label":label,"source":"OSINT Verified"})
-        else:
-            results.append({"site":site,"url":p["url"].format(username),"status":"NOT FOUND","confidence":0,"label":"No Public Evidence Found","source":"OSINT Scan"})
-    return results
-
-
+# ─────────────────────────────────────────
+# EMAIL RESULTS
+# ─────────────────────────────────────────
 def build_email_results(email):
-    results=[]
-    if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$",email):
-        results.append({"site":"Email Format","url":"#","status":"NOT FOUND","confidence":20,"label":"Invalid Email Structure"})
+    results = []
+    if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email):
+        results.append({"site": "Email Format", "url": "#", "status": "NOT FOUND", "confidence": 20, "label": "Invalid Email Structure"})
         return results
-    domain=email.split("@")[-1].lower()
-    disposable=["tempmail.com","guerrillamail.com","10minutemail.com","mailinator.com","throwaway.email","yopmail.com"]
-    is_disp=domain in disposable
-    results.append({"site":"Email Format","url":"#","status":"FOUND","confidence":100,
-        "label":"Valid Email Structure"+(" | ⚠ Disposable Domain" if is_disp else "")})
-    public=["gmail.com","outlook.com","hotmail.com","yahoo.com","icloud.com","live.com","msn.com"]
-    ptype="Public Email Provider" if domain in public else "Custom / Organisation Domain"
-    results.append({"site":"Email Provider","url":f"https://{domain}","status":"FOUND",
-        "confidence":85 if domain in public else 92,"label":f"{ptype} — {domain}"})
-    dns_data=dns_lookup(domain)
+    domain = email.split("@")[-1].lower()
+    disposable = ["tempmail.com","guerrillamail.com","10minutemail.com","mailinator.com","throwaway.email","yopmail.com"]
+    is_disp = domain in disposable
+    results.append({"site": "Email Format", "url": "#", "status": "FOUND", "confidence": 100,
+                    "label": "Valid Email Structure" + (" | ⚠ Disposable Domain" if is_disp else "")})
+    public = ["gmail.com","outlook.com","hotmail.com","yahoo.com","icloud.com","live.com","msn.com"]
+    ptype  = "Public Email Provider" if domain in public else "Custom / Organisation Domain"
+    results.append({"site": "Email Provider", "url": f"https://{domain}", "status": "FOUND",
+                    "confidence": 85 if domain in public else 92, "label": f"{ptype} — {domain}"})
+    dns_data = dns_lookup(domain)
     if dns_data:
-        mx_list=dns_data.get("MX",[])
-        a_list=dns_data.get("A",[])
-        mx_info=", ".join(mx_list[:2]) if mx_list else "Not found"
-        results.append({"site":"MX Records","url":f"https://mxtoolbox.com/SuperTool.aspx?action=mx%3a{domain}",
-            "status":"FOUND","confidence":90,"label":f"Mail servers: {mx_info[:80]}"})
+        mx_list = dns_data.get("MX", [])
+        a_list  = dns_data.get("A",  [])
+        mx_info = ", ".join(mx_list[:2]) if mx_list else "Not found"
+        results.append({"site": "MX Records", "url": f"https://mxtoolbox.com/SuperTool.aspx?action=mx%3a{domain}",
+                        "status": "FOUND", "confidence": 90, "label": f"Mail servers: {mx_info[:80]}"})
         if a_list:
-            results.append({"site":"Domain IP","url":f"https://ipapi.co/{a_list[0]}/",
-                "status":"FOUND","confidence":92,"label":f"IP: {', '.join(a_list[:3])}"})
-            ip_info=lookup_ip(a_list[0])
+            results.append({"site": "Domain IP", "url": f"https://ipapi.co/{a_list[0]}/",
+                            "status": "FOUND", "confidence": 92, "label": f"IP: {', '.join(a_list[:3])}"})
+            ip_info = lookup_ip(a_list[0])
             if ip_info:
-                results.append({"site":"IP Geolocation","url":f"https://ipapi.co/{ip_info['ip']}/",
-                    "status":"FOUND","confidence":88,
-                    "label":f"🌍 {ip_info['country']} — {ip_info['city']} | ISP: {ip_info['org']}"})
-    gravatar=check_gravatar(email)
+                results.append({"site": "IP Geolocation", "url": f"https://ipapi.co/{ip_info['ip']}/",
+                                "status": "FOUND", "confidence": 88,
+                                "label": f"🌍 {ip_info['country']} — {ip_info['city']} | ISP: {ip_info['org']}"})
+    gravatar = check_gravatar(email)
     if gravatar.get("found"):
-        g=gravatar; label="Gravatar profile found"
-        if g.get("display_name"): label+=f" — {g['display_name']}"
-        if g.get("location"):     label+=f" | 📍 {g['location']}"
-        if g.get("accounts"):     label+=f" | Linked: {', '.join(g['accounts'][:3])}"
-        results.append({"site":"Gravatar","url":g.get("profile_url","https://gravatar.com"),
-            "status":"FOUND","confidence":92,"label":label})
+        g = gravatar
+        label = "Gravatar profile found"
+        if g.get("display_name"): label += f" — {g['display_name']}"
+        if g.get("location"):     label += f" | 📍 {g['location']}"
+        if g.get("accounts"):     label += f" | Linked: {', '.join(g['accounts'][:3])}"
+        results.append({"site": "Gravatar", "url": g.get("profile_url", "https://gravatar.com"),
+                        "status": "FOUND", "confidence": 92, "label": label})
     else:
-        results.append({"site":"Gravatar","url":"https://gravatar.com","status":"NOT FOUND","confidence":60,"label":"No Gravatar profile found"})
-    results.append({"site":"WHOIS Domain","url":f"https://who.is/whois/{domain}","status":"FOUND","confidence":85,"label":"WHOIS Lookup Ready"})
+        results.append({"site": "Gravatar", "url": "https://gravatar.com", "status": "NOT FOUND",
+                        "confidence": 60, "label": "No Gravatar profile found"})
+    results.append({"site": "WHOIS Domain", "url": f"https://who.is/whois/{domain}",
+                    "status": "FOUND", "confidence": 85, "label": "WHOIS Lookup Ready"})
     try:
-        r=requests.get(f"https://emailrep.io/{email}",headers={"Accept":"application/json","User-Agent":"OSINT-Platform"},timeout=10)
-        if r.status_code==200:
-            d=r.json(); rep=d.get("reputation","unknown"); sus=d.get("suspicious",False)
-            ref=d.get("references",0); tags=d.get("details",{}).get("tags",[])
-            conf={"high":95,"medium":80,"low":60}.get(rep,75)
-            label=f"Reputation: {rep.upper()} | References: {ref}"
-            if sus:  label+=" | ⚠ SUSPICIOUS"
-            if tags: label+=f" | Tags: {', '.join(tags[:3])}"
-            results.append({"site":"Email Reputation","url":"#","status":"FOUND","confidence":conf,"label":label})
+        r = requests.get(f"https://emailrep.io/{email}",
+                         headers={"Accept": "application/json", "User-Agent": "OSINT-Platform"}, timeout=8)
+        if r.status_code == 200:
+            d   = r.json()
+            rep = d.get("reputation", "unknown")
+            sus = d.get("suspicious", False)
+            ref = d.get("references", 0)
+            tags = d.get("details", {}).get("tags", [])
+            conf = {"high": 95, "medium": 80, "low": 60}.get(rep, 75)
+            label = f"Reputation: {rep.upper()} | References: {ref}"
+            if sus:  label += " | ⚠ SUSPICIOUS"
+            if tags: label += f" | Tags: {', '.join(tags[:3])}"
+            results.append({"site": "Email Reputation", "url": "#", "status": "FOUND", "confidence": conf, "label": label})
         else:
-            results.append({"site":"Email Reputation","url":"#","status":"NOT FOUND","confidence":40,"label":"EmailRep unavailable"})
+            results.append({"site": "Email Reputation", "url": "#", "status": "NOT FOUND", "confidence": 40, "label": "EmailRep unavailable"})
     except Exception:
-        results.append({"site":"Email Reputation","url":"#","status":"NOT FOUND","confidence":40,"label":"EmailRep request failed"})
-    hibp_key=os.getenv("HIBP_API_KEY")
+        results.append({"site": "Email Reputation", "url": "#", "status": "NOT FOUND", "confidence": 40, "label": "EmailRep request failed"})
+    hibp_key = os.getenv("HIBP_API_KEY")
     if hibp_key:
         try:
-            resp=requests.get(f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
-                headers={"hibp-api-key":hibp_key,"User-Agent":"OSINT-Platform"},
-                params={"truncateResponse":"false"},timeout=15)
-            if resp.status_code==200:
-                breaches=resp.json(); n=len(breaches)
-                names=", ".join(b.get("Name","") for b in breaches[:4])
-                results.append({"site":"HIBP Breach Check","url":"https://haveibeenpwned.com/",
-                    "status":"FOUND","confidence":95,"label":f"⚠ {n} Breach(es): {names}"})
-            elif resp.status_code==404:
-                results.append({"site":"HIBP Breach Check","url":"https://haveibeenpwned.com/",
-                    "status":"NOT FOUND","confidence":90,"label":"✅ No known breaches"})
+            resp = requests.get(f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
+                                headers={"hibp-api-key": hibp_key, "User-Agent": "OSINT-Platform"},
+                                params={"truncateResponse": "false"}, timeout=12)
+            if resp.status_code == 200:
+                breaches = resp.json()
+                names    = ", ".join(b.get("Name", "") for b in breaches[:4])
+                results.append({"site": "HIBP Breach Check", "url": "https://haveibeenpwned.com/",
+                                "status": "FOUND", "confidence": 95, "label": f"⚠ {len(breaches)} Breach(es): {names}"})
+            elif resp.status_code == 404:
+                results.append({"site": "HIBP Breach Check", "url": "https://haveibeenpwned.com/",
+                                "status": "NOT FOUND", "confidence": 90, "label": "✅ No known breaches"})
         except Exception:
-            results.append({"site":"HIBP Breach Check","url":"#","status":"NOT FOUND","confidence":40,"label":"HIBP failed"})
+            results.append({"site": "HIBP Breach Check", "url": "#", "status": "NOT FOUND", "confidence": 40, "label": "HIBP failed"})
     else:
-        results.append({"site":"HIBP Breach Check","url":"https://haveibeenpwned.com/","status":"NOT FOUND","confidence":50,"label":"Add HIBP_API_KEY in .env for breach data"})
+        results.append({"site": "HIBP Breach Check", "url": "https://haveibeenpwned.com/",
+                        "status": "NOT FOUND", "confidence": 50, "label": "Add HIBP_API_KEY in .env for breach data"})
     return results
 
 
+# ─────────────────────────────────────────
+# PHONE RESULTS
+# ─────────────────────────────────────────
 def build_phone_results(phone):
-    results=[]; clean=phone.replace(" ","").replace("-","").replace("(","").replace(")","")
-    if clean.startswith("+") and clean[1:].isdigit() and len(clean)>=8:
-        results.append({"site":"Phone Format","url":"#","status":"FOUND","confidence":100,"label":"Valid International Format (E.164)"})
-    elif clean.isdigit() and len(clean)>=8:
-        results.append({"site":"Phone Format","url":"#","status":"FOUND","confidence":80,"label":"Valid Local Format"})
+    results = []
+    clean = phone.replace(" ","").replace("-","").replace("(","").replace(")","")
+    if clean.startswith("+") and clean[1:].isdigit() and len(clean) >= 8:
+        results.append({"site": "Phone Format", "url": "#", "status": "FOUND", "confidence": 100, "label": "Valid International Format (E.164)"})
+    elif clean.isdigit() and len(clean) >= 8:
+        results.append({"site": "Phone Format", "url": "#", "status": "FOUND", "confidence": 80, "label": "Valid Local Format"})
     else:
-        results.append({"site":"Phone Format","url":"#","status":"NOT FOUND","confidence":20,"label":"Invalid Phone Structure"})
+        results.append({"site": "Phone Format", "url": "#", "status": "NOT FOUND", "confidence": 20, "label": "Invalid Phone Structure"})
         return results
-    country_codes={
-        "+966":("Saudi Arabia","SA",95),"+971":("UAE","AE",90),"+965":("Kuwait","KW",90),
-        "+974":("Qatar","QA",90),"+973":("Bahrain","BH",90),"+968":("Oman","OM",90),
-        "+1":("USA/Canada","US",88),"+44":("UK","GB",88),"+20":("Egypt","EG",85),
-        "+962":("Jordan","JO",88),"+961":("Lebanon","LB",88),"+963":("Syria","SY",85),
-        "+964":("Iraq","IQ",85),"+90":("Turkey","TR",85),"+92":("Pakistan","PK",85),
-        "+91":("India","IN",85),"+49":("Germany","DE",88),"+33":("France","FR",88),
+    country_codes = {
+        "+966":("Saudi Arabia","SA",95), "+971":("UAE","AE",90), "+965":("Kuwait","KW",90),
+        "+974":("Qatar","QA",90), "+973":("Bahrain","BH",90), "+968":("Oman","OM",90),
+        "+1":("USA/Canada","US",88), "+44":("UK","GB",88), "+20":("Egypt","EG",85),
+        "+962":("Jordan","JO",88), "+961":("Lebanon","LB",88), "+963":("Syria","SY",85),
+        "+964":("Iraq","IQ",85), "+90":("Turkey","TR",85), "+92":("Pakistan","PK",85),
+        "+91":("India","IN",85), "+49":("Germany","DE",88), "+33":("France","FR",88),
     }
-    country,country_code,conf="Unknown Region","XX",60
-    for code,(name,cc,c) in country_codes.items():
-        if clean.startswith(code): country,country_code,conf=name,cc,c; break
-    results.append({"site":"Country Detection","url":"#","status":"FOUND","confidence":conf,"label":f"🌍 {country} ({country_code})"})
-    num_digits=len(clean.lstrip("+"))
-    line_type="Mobile" if num_digits in [9,10,12] else "Landline/Unknown"
-    results.append({"site":"Number Analysis","url":"#","status":"FOUND","confidence":70,"label":f"Type: {line_type} | Digits: {num_digits}"})
-    try:
-        r=requests.get(f"https://api.numlookupapi.com/v1/info/{clean}",headers={"User-Agent":"OSINT-Platform"},timeout=8)
-        if r.status_code==200:
-            d=r.json()
-            results.append({"site":"Carrier & Line Type","url":"#","status":"FOUND","confidence":82,
-                "label":f"Carrier: {d.get('carrier','Unknown')} | Type: {d.get('line_type','Unknown')} | {d.get('country_name',country)}"})
-    except Exception: pass
-    wa_num=clean.replace("+","")
-    results.append({"site":"WhatsApp","url":f"https://wa.me/{wa_num}","status":"FOUND","confidence":75,"label":f"Direct link → wa.me/{wa_num}"})
-    results.append({"site":"Telegram","url":f"https://t.me/+{wa_num}","status":"FOUND","confidence":60,"label":"Telegram link — manual verification"})
-    results.append({"site":"Truecaller","url":"https://www.truecaller.com/","status":"FOUND","confidence":65,"label":"Search manually — Truecaller"})
-    results.append({"site":"Sync.me","url":"https://sync.me/","status":"FOUND","confidence":60,"label":"Reverse lookup — Sync.me"})
+    country, country_code, conf = "Unknown Region", "XX", 60
+    for code, (name, cc, c) in country_codes.items():
+        if clean.startswith(code):
+            country, country_code, conf = name, cc, c
+            break
+    results.append({"site": "Country Detection", "url": "#", "status": "FOUND", "confidence": conf, "label": f"🌍 {country} ({country_code})"})
+    num_digits = len(clean.lstrip("+"))
+    line_type  = "Mobile" if num_digits in [9, 10, 12] else "Landline/Unknown"
+    results.append({"site": "Number Analysis", "url": "#", "status": "FOUND", "confidence": 70, "label": f"Type: {line_type} | Digits: {num_digits}"})
+    wa_num = clean.replace("+", "")
+    results.append({"site": "WhatsApp",  "url": f"https://wa.me/{wa_num}", "status": "FOUND", "confidence": 75, "label": f"Direct link → wa.me/{wa_num}"})
+    results.append({"site": "Telegram",  "url": f"https://t.me/+{wa_num}", "status": "FOUND", "confidence": 60, "label": "Telegram link — manual verification"})
+    results.append({"site": "Truecaller","url": "https://www.truecaller.com/", "status": "FOUND", "confidence": 65, "label": "Search manually — Truecaller"})
+    results.append({"site": "Sync.me",   "url": "https://sync.me/", "status": "FOUND", "confidence": 60, "label": "Reverse lookup — Sync.me"})
     if country_code in ["SA","AE","KW","QA","BH","OM"]:
-        results.append({"site":"Gulf Directory","url":"https://whitepages.ae/","status":"FOUND","confidence":65,"label":f"Gulf directory — {country}"})
+        results.append({"site": "Gulf Directory", "url": "https://whitepages.ae/", "status": "FOUND", "confidence": 65, "label": f"Gulf directory — {country}"})
     return results
 
 
+# ─────────────────────────────────────────
+# DOMAIN RESULTS
+# ─────────────────────────────────────────
 def build_domain_results(domain):
-    domain=re.sub(r"https?://","",domain).replace("www.","").strip().strip("/")
-    results=[]
-    if not re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",domain):
-        results.append({"site":"Domain Format","url":"#","status":"NOT FOUND","confidence":20,"label":"Invalid Domain Structure"})
+    domain = re.sub(r"https?://", "", domain).replace("www.", "").strip().strip("/")
+    results = []
+    if not re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", domain):
+        results.append({"site": "Domain Format", "url": "#", "status": "NOT FOUND", "confidence": 20, "label": "Invalid Domain Structure"})
         return results
-    tld=domain.split(".")[-1].upper()
-    results.append({"site":"Domain Format","url":f"https://{domain}","status":"FOUND","confidence":100,"label":f"Valid Domain — .{tld} TLD"})
-    dns_data=dns_lookup(domain)
+    tld = domain.split(".")[-1].upper()
+    results.append({"site": "Domain Format", "url": f"https://{domain}", "status": "FOUND", "confidence": 100, "label": f"Valid Domain — .{tld} TLD"})
+    dns_data = dns_lookup(domain)
     if dns_data.get("A"):
-        a_records=dns_data["A"]
-        results.append({"site":"A Record (IP)","url":f"https://ipapi.co/{a_records[0]}/",
-            "status":"FOUND","confidence":97,"label":f"IP: {', '.join(a_records[:3])}"})
-        ip_info=lookup_ip(a_records[0])
+        a_records = dns_data["A"]
+        results.append({"site": "A Record (IP)", "url": f"https://ipapi.co/{a_records[0]}/",
+                        "status": "FOUND", "confidence": 97, "label": f"IP: {', '.join(a_records[:3])}"})
+        ip_info = lookup_ip(a_records[0])
         if ip_info:
-            results.append({"site":"IP Geolocation","url":f"https://ipapi.co/{ip_info['ip']}/",
-                "status":"FOUND","confidence":92,
-                "label":f"🌍 {ip_info['country']} — {ip_info['city']} | ISP: {ip_info['org']} | TZ: {ip_info['timezone']}"})
+            results.append({"site": "IP Geolocation", "url": f"https://ipapi.co/{ip_info['ip']}/",
+                            "status": "FOUND", "confidence": 92,
+                            "label": f"🌍 {ip_info['country']} — {ip_info['city']} | ISP: {ip_info['org']} | TZ: {ip_info['timezone']}"})
     if dns_data.get("MX"):
-        mx=", ".join(dns_data["MX"][:2])
-        results.append({"site":"MX Records","url":f"https://mxtoolbox.com/SuperTool.aspx?action=mx%3a{domain}",
-            "status":"FOUND","confidence":90,"label":f"Mail servers: {mx[:80]}"})
+        mx = ", ".join(dns_data["MX"][:2])
+        results.append({"site": "MX Records", "url": f"https://mxtoolbox.com/SuperTool.aspx?action=mx%3a{domain}",
+                        "status": "FOUND", "confidence": 90, "label": f"Mail servers: {mx[:80]}"})
     if dns_data.get("NS"):
-        ns=", ".join(dns_data["NS"][:2])
-        results.append({"site":"Nameservers","url":"#","status":"FOUND","confidence":93,"label":f"NS: {ns[:80]}"})
+        ns = ", ".join(dns_data["NS"][:2])
+        results.append({"site": "Nameservers", "url": "#", "status": "FOUND", "confidence": 93, "label": f"NS: {ns[:80]}"})
     if dns_data.get("TXT"):
-        txt_records=dns_data["TXT"]
-        spf=next((t for t in txt_records if "v=spf" in t.lower()),None)
-        dmarc=next((t for t in txt_records if "v=dmarc" in t.lower()),None)
-        results.append({"site":"SPF Record","url":"#","status":"FOUND" if spf else "NOT FOUND",
-            "confidence":88 if spf else 60,
-            "label":f"SPF: {spf[:70]}" if spf else "No SPF record — email spoofing possible ⚠"})
-        results.append({"site":"DMARC Record","url":"#","status":"FOUND" if dmarc else "NOT FOUND",
-            "confidence":88 if dmarc else 60,
-            "label":"DMARC policy configured ✅" if dmarc else "No DMARC record ⚠"})
-    subdomains=get_subdomains(domain)
+        txt_records = dns_data["TXT"]
+        spf   = next((t for t in txt_records if "v=spf"   in t.lower()), None)
+        dmarc = next((t for t in txt_records if "v=dmarc" in t.lower()), None)
+        results.append({"site": "SPF Record",   "url": "#",
+                        "status": "FOUND" if spf else "NOT FOUND", "confidence": 88 if spf else 60,
+                        "label": f"SPF: {spf[:70]}" if spf else "No SPF record — email spoofing possible ⚠"})
+        results.append({"site": "DMARC Record", "url": "#",
+                        "status": "FOUND" if dmarc else "NOT FOUND", "confidence": 88 if dmarc else 60,
+                        "label": "DMARC policy configured ✅" if dmarc else "No DMARC record ⚠"})
+    subdomains = get_subdomains(domain)
     if subdomains:
-        results.append({"site":"Subdomains (crt.sh)","url":f"https://crt.sh/?q=%.{domain}",
-            "status":"FOUND","confidence":87,
-            "label":f"Found {len(subdomains)}: {', '.join(subdomains[:5])}{'...' if len(subdomains)>5 else ''}"})
+        results.append({"site": "Subdomains (crt.sh)", "url": f"https://crt.sh/?q=%.{domain}",
+                        "status": "FOUND", "confidence": 87,
+                        "label": f"Found {len(subdomains)}: {', '.join(subdomains[:5])}{'...' if len(subdomains)>5 else ''}"})
     else:
-        results.append({"site":"Subdomains (crt.sh)","url":f"https://crt.sh/?q=%.{domain}",
-            "status":"NOT FOUND","confidence":60,"label":"No subdomains in certificate logs"})
-    wayback=check_wayback(domain)
+        results.append({"site": "Subdomains (crt.sh)", "url": f"https://crt.sh/?q=%.{domain}",
+                        "status": "NOT FOUND", "confidence": 60, "label": "No subdomains in certificate logs"})
+    wayback = check_wayback(domain)
     if wayback.get("available"):
-        results.append({"site":"Wayback Machine","url":wayback.get("url",""),
-            "status":"FOUND","confidence":88,"label":f"🕰 Archived — Last snapshot: {wayback.get('date','')}"})
+        results.append({"site": "Wayback Machine", "url": wayback.get("url", ""),
+                        "status": "FOUND", "confidence": 88, "label": f"🕰 Archived — Last snapshot: {wayback.get('date', '')}"})
     else:
-        results.append({"site":"Wayback Machine","url":f"https://web.archive.org/web/*/{domain}",
-            "status":"NOT FOUND","confidence":50,"label":"No archived snapshots"})
-    urlscan=search_urlscan(domain)
+        results.append({"site": "Wayback Machine", "url": f"https://web.archive.org/web/*/{domain}",
+                        "status": "NOT FOUND", "confidence": 50, "label": "No archived snapshots"})
+    urlscan = search_urlscan(domain)
     if urlscan.get("found"):
-        label=f"Scans: {urlscan.get('total',0)} | Last: {urlscan.get('last_scan','')[:10]}"
-        if urlscan.get("server"):  label+=f" | Server: {urlscan['server']}"
-        if urlscan.get("country"): label+=f" | 🌍 {urlscan['country']}"
-        results.append({"site":"URLScan.io","url":urlscan.get("scan_url",""),
-            "status":"FOUND","confidence":83,"label":label})
-    for site,url,conf,label in [
-        ("WHOIS Lookup",f"https://who.is/whois/{domain}",88,"Domain registration info"),
-        ("SSL Certificate",f"https://www.ssllabs.com/ssltest/analyze.html?d={domain}",83,"SSL/TLS security grade"),
-        ("VirusTotal",f"https://www.virustotal.com/gui/domain/{domain}",85,"Malware & reputation check"),
-        ("Security Headers",f"https://securityheaders.com/?q={domain}",78,"HTTP security headers"),
-        ("Shodan",f"https://www.shodan.io/search?query={domain}",75,"Open ports & services"),
+        label = f"Scans: {urlscan.get('total',0)} | Last: {urlscan.get('last_scan','')[:10]}"
+        if urlscan.get("server"):  label += f" | Server: {urlscan['server']}"
+        if urlscan.get("country"): label += f" | 🌍 {urlscan['country']}"
+        results.append({"site": "URLScan.io", "url": urlscan.get("scan_url", ""),
+                        "status": "FOUND", "confidence": 83, "label": label})
+    for site, url, conf, label in [
+        ("WHOIS Lookup",    f"https://who.is/whois/{domain}",                              88, "Domain registration info"),
+        ("SSL Certificate", f"https://www.ssllabs.com/ssltest/analyze.html?d={domain}",   83, "SSL/TLS security grade"),
+        ("VirusTotal",      f"https://www.virustotal.com/gui/domain/{domain}",             85, "Malware & reputation check"),
+        ("Security Headers",f"https://securityheaders.com/?q={domain}",                   78, "HTTP security headers"),
+        ("Shodan",          f"https://www.shodan.io/search?query={domain}",                75, "Open ports & services"),
     ]:
-        results.append({"site":site,"url":url,"status":"FOUND","confidence":conf,"label":label})
+        results.append({"site": site, "url": url, "status": "FOUND", "confidence": conf, "label": label})
     return results
 
 
@@ -609,11 +838,13 @@ def build_domain_results(domain):
 # ROUTES
 # ─────────────────────────────────────────
 @app.get("/report")
-def download_report(target:str,search_type:str="username"):
-    dispatch={"username":build_results,"email":build_email_results,"phone":build_phone_results,"domain":build_domain_results}
-    results=dispatch.get(search_type,build_results)(target)
-    filepath=generate_pdf_report(target,search_type,results)
-    return FileResponse(filepath,media_type="application/pdf",filename=os.path.basename(filepath))
+def download_report(target: str, search_type: str = "username"):
+    dispatch = {"username": build_results, "email": build_email_results,
+                "phone": build_phone_results, "domain": build_domain_results}
+    results  = dispatch.get(search_type, build_results)(target)
+    filepath = generate_pdf_report(target, search_type, results)
+    return FileResponse(filepath, media_type="application/pdf", filename=os.path.basename(filepath))
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
@@ -623,7 +854,7 @@ async def login_submit(request: Request, username: str = Form(...), password: st
     token = login(username.strip(), password)
     if not token:
         return templates.TemplateResponse(request=request, name="login.html",
-            context={"error": "اسم المستخدم أو كلمة المرور غلط"}, status_code=401)
+                                          context={"error": "اسم المستخدم أو كلمة المرور غلط"}, status_code=401)
     response = RedirectResponse("/", status_code=302)
     response.set_cookie(key=COOKIE_NAME, value=token, httponly=True, samesite="lax", max_age=60*60*8)
     return response
@@ -636,40 +867,45 @@ def logout_route(request: Request):
     response.delete_cookie(COOKIE_NAME)
     return response
 
-@app.get("/",response_class=HTMLResponse)
-def home(request:Request):
-    return templates.TemplateResponse(request=request,name="index.html",context={"username":None,"results":[],"report":None,"found_count":0,"notfound_count":0})
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html",
+                                      context={"username": None, "results": [], "report": None,
+                                               "found_count": 0, "notfound_count": 0})
 
-@app.post("/",response_class=HTMLResponse)
-def search(request:Request,username:str=Form(...),search_type:str=Form("username")):
-    username=username.strip()
-    if search_type=="username":
-        username=username.replace("@","")
-    elif search_type=="phone":
+@app.post("/", response_class=HTMLResponse)
+def search(request: Request, username: str = Form(...), search_type: str = Form("username")):
+    username = username.strip()
+    if search_type == "username":
+        username = username.replace("@", "")
+    elif search_type == "phone":
         if username.startswith("00"):
-            username="+"+username[2:]
-    report=None
+            username = "+" + username[2:]
+    report = None
     if username.startswith("http://") or username.startswith("https://"):
-        results=[]; report=analyze_url(username); found_count=notfound_count=0
+        results = []; report = analyze_url(username); found_count = notfound_count = 0
     else:
-        dispatch={"username":build_results,"email":build_email_results,"phone":build_phone_results,"domain":build_domain_results}
-        results=dispatch.get(search_type,build_results)(username) or []
-        save_search(username,search_type,results)
-        found_count=sum(1 for r in results if r["status"]=="FOUND")
-        notfound_count=sum(1 for r in results if r["status"]=="NOT FOUND")
-    return templates.TemplateResponse(request=request,name="index.html",context={
-        "username":username,"search_type":search_type,"results":results,
-        "report":report,"found_count":found_count,"notfound_count":notfound_count})
-        
-@app.get("/saved",response_class=HTMLResponse)
-def saved_results(request:Request):
-    searches=get_all_searches()
-    return templates.TemplateResponse(request=request,name="saved.html",context={"searches":searches})
+        dispatch = {"username": build_results, "email": build_email_results,
+                    "phone": build_phone_results, "domain": build_domain_results}
+        results      = dispatch.get(search_type, build_results)(username) or []
+        save_search(username, search_type, results)
+        found_count    = sum(1 for r in results if r["status"] == "FOUND")
+        notfound_count = sum(1 for r in results if r["status"] == "NOT FOUND")
+    return templates.TemplateResponse(request=request, name="index.html",
+                                      context={"username": username, "search_type": search_type,
+                                               "results": results, "report": report,
+                                               "found_count": found_count, "notfound_count": notfound_count})
+
+@app.get("/saved", response_class=HTMLResponse)
+def saved_results(request: Request):
+    searches = get_all_searches()
+    return templates.TemplateResponse(request=request, name="saved.html", context={"searches": searches})
 
 @app.get("/suggestions")
-def suggestions(q:str=""):
-    searches=get_all_searches(limit=100)
-    seen=[]
+def suggestions(q: str = ""):
+    searches = get_all_searches(limit=100)
+    seen = []
     for s in searches:
-        if q.lower() in s["target"].lower() and s["target"] not in seen: seen.append(s["target"])
-    return {"results":seen[:5]}
+        if q.lower() in s["target"].lower() and s["target"] not in seen:
+            seen.append(s["target"])
+    return {"results": seen[:5]}

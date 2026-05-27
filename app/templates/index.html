@@ -4,133 +4,360 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OSINT Platform</title>
-<link rel="stylesheet" href="/static/css/style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
-#search-btn.searching { opacity:0.7; cursor:not-allowed; pointer-events:none; }
-#searching-msg { display:none; text-align:center; font-size:12px; letter-spacing:1.5px; color:var(--text3); margin-top:10px; }
-#searching-msg.active { display:block; }
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg-deep:#000810;
+  --bg-side:#00040a;
+  --bg-card:#00080e;
+  --border-dim:#001828;
+  --border-faint:#001525;
+  --text-bright:#bae6fd;
+  --text-mid:#a8d8ee;
+  --text-accent:#56b8d8;
+  --text-muted:#003050;
+  --text-sep:#2a7d9c;
+  --line:#1a6a8a;
+  --btn-border:#0f4a62;
+  --mono:'Courier New',monospace;
+  --green:#22c55e; --green-bg:rgba(34,197,94,.08); --green-bdr:rgba(34,197,94,.2);
+  --red:#ef4444;   --red-bg:rgba(239,68,68,.08);   --red-bdr:rgba(239,68,68,.2);
+  --accent:#56b8d8;
+  --bg2:#00080e; --bg3:#000c14;
+  --text:#a8d8ee; --text2:#56b8d8; --text3:#003050;
+  --border:#001525; --border-md:#001828;
+  --radius-lg:12px;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes fadein{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes grow{0%{width:0}100%{width:var(--w,0%)}}
+@keyframes scan{0%{left:-35%}100%{left:115%}}
+@keyframes shimmer{0%,100%{opacity:.82}50%{opacity:1}}
+@keyframes glowline{0%,100%{opacity:.22}50%{opacity:.42}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes btnpulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(14,165,212,0);border-color:#0f4a62}
+  50%{box-shadow:0 0 7px 1px rgba(14,165,212,.18);border-color:#1a6a8a}
+}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-#suggestions-box {
-  display: none;
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  width: 100%;
-  z-index: 999;
-  background: var(--bg2, #1a1c28);
-  border: 1px solid var(--border-md, #2e3147);
-  border-radius: 12px;
-  padding: 6px 0;
-  box-sizing: border-box;
+html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-serif;color:var(--text-mid);}
+
+/* ── LAYOUT ── */
+.osint-layout{display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:220px;flex-shrink:0;
+  background:var(--bg-side);
+  padding:22px 12px;
+  display:flex;flex-direction:column;
+  position:relative;
+  border-right:0.5px solid var(--border-faint);
 }
-#suggestions-box .sug-label {
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  color: var(--text3, #5a5f7a);
-  padding: 4px 14px 6px;
-  text-transform: uppercase;
+.sidebar::after{
+  content:'';position:absolute;top:8%;right:0;
+  width:1px;height:84%;
+  background:linear-gradient(to bottom,transparent,#1e7a96 38%,#1e7a96 62%,transparent);
+  opacity:.28;animation:glowline 4s ease-in-out infinite;
 }
-#suggestions-box .sug-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 14px;
-  cursor: pointer;
-  transition: background 0.15s;
+.brand{display:flex;align-items:center;gap:8px;padding:0 6px 24px;}
+.brand i{color:var(--text-accent);font-size:22px;flex-shrink:0;}
+.brand-text{display:flex;align-items:center;gap:6px;}
+.brand-name{color:var(--text-bright);font-size:18px;font-weight:500;letter-spacing:-.3px;}
+.brand-sep{width:1px;height:16px;background:var(--line);}
+.brand-sub{color:var(--text-sep);font-size:10px;letter-spacing:1.5px;font-family:var(--mono);}
+
+.nav-section{
+  display:block;color:var(--text-muted);
+  font-size:10px;letter-spacing:1.2px;
+  padding:0 6px 7px;margin-top:6px;
 }
-#suggestions-box .sug-item:hover {
-  background: var(--bg3, #22253a);
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 12px;border-radius:8px;
+  cursor:pointer;transition:all .2s;
+  border:0.5px solid transparent;
+  color:var(--text-muted);font-size:12.5px;
 }
-#suggestions-box .sug-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: var(--bg3, #22253a);
-  color: var(--text3, #5a5f7a);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  flex-shrink: 0;
+.nav-item i{font-size:15px;color:var(--text-muted);}
+.nav-item:hover{background:#001522;color:#3a8faa;}
+.nav-item:hover i{color:#3a8faa;}
+.nav-item.active{background:#001e30;border-color:#002e48;color:var(--text-accent);}
+.nav-item.active i{color:var(--text-accent);}
+.side-bottom{margin-top:auto;border-top:0.5px solid var(--border-faint);padding-top:12px;display:flex;flex-direction:column;gap:2px;}
+
+/* ── MAIN ── */
+.main-panel{
+  flex:1;background:var(--bg-deep);
+  padding:28px 32px;
+  display:flex;flex-direction:column;gap:22px;
+  overflow-y:auto;min-width:0;
 }
-#suggestions-box .sug-text {
-  font-size: 14px;
-  color: var(--text, #c8cce0);
-  flex: 1;
+
+/* top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.page-head-row{display:flex;align-items:center;gap:8px;}
+.page-title-main{font-size:28px;font-weight:500;color:var(--text-bright);letter-spacing:-.5px;}
+.page-vsep{width:1px;height:22px;background:var(--line);}
+.page-title-tag{font-size:13px;color:var(--text-sep);letter-spacing:2px;font-family:var(--mono);}
+.page-sub{color:var(--text-muted);font-size:11px;margin-top:3px;}
+.status-pill{
+  display:flex;align-items:center;gap:6px;
+  border:0.5px solid var(--border-dim);border-radius:20px;
+  padding:5px 14px;background:var(--bg-card);
 }
-#suggestions-box .sug-sub {
-  font-size: 11px;
-  color: var(--text3, #5a5f7a);
-  margin-top: 1px;
+.status-dot{width:6px;height:6px;border-radius:50%;background:#0ea5d4;animation:pulse 2s infinite;}
+.status-text{color:var(--text-muted);font-size:11px;letter-spacing:.8px;}
+
+/* search module */
+.search-module{
+  background:var(--bg-card);border:0.5px solid var(--border-dim);
+  border-radius:12px;padding:18px 20px;flex-shrink:0;
 }
-#suggestions-box .sug-clear {
-  font-size: 11px;
-  color: var(--text3, #5a5f7a);
-  padding: 6px 14px 2px;
-  text-align: right;
-  cursor: pointer;
-  border-top: 1px solid var(--border, #22253a);
-  margin-top: 4px;
+.search-types{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.type-btn{
+  padding:5px 14px;border-radius:20px;font-size:12px;
+  cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .18s;
+  background:transparent;font-family:inherit;
+  color:var(--text-muted);border:0.5px solid #002030;
 }
-#suggestions-box .sug-clear:hover {
-  color: var(--accent, #4f6ef7);
+.type-btn:hover{color:var(--text-accent);border-color:var(--text-muted);}
+.type-btn.active{
+  color:var(--text-accent);border:0.5px solid var(--btn-border);
+  animation:btnpulse 2.8s ease-in-out infinite;font-weight:500;
+}
+.search-row{display:flex;gap:10px;position:relative;}
+.search-row input[type=text]{
+  flex:1;background:var(--bg-deep);
+  border:0.5px solid #002030;border-radius:8px;
+  padding:10px 14px 10px 38px;font-size:13px;
+  font-family:var(--mono);color:var(--text-mid);
+  outline:none;transition:border-color .2s;
+}
+.search-row input[type=text]::placeholder{color:#2a5f74;}
+.search-row input[type=text]:focus{border-color:var(--line);}
+.search-icon-wrap{
+  position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  color:var(--text-mid);font-size:14px;opacity:.7;pointer-events:none;
+}
+#search-btn{
+  background:transparent;color:var(--text-accent);
+  padding:10px 26px;border-radius:8px;
+  border:0.5px solid var(--btn-border);
+  font-size:13px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;
+  font-weight:500;white-space:nowrap;
+  animation:btnpulse 2.8s ease-in-out infinite;
+  font-family:inherit;
+}
+#search-btn.searching{opacity:.7;cursor:not-allowed;pointer-events:none;}
+#searching-msg{display:none;text-align:center;font-size:11px;letter-spacing:1.5px;color:var(--text-muted);margin-top:10px;font-family:var(--mono);}
+#searching-msg.active{display:block;}
+
+/* scan status */
+.scan-status{
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+}
+.scan-line{flex:1;height:1px;background:linear-gradient(to right,transparent,var(--line),transparent);opacity:.35;}
+#scan-text{font-size:10px;letter-spacing:1.5px;color:var(--text-muted);white-space:nowrap;font-family:var(--mono);}
+
+/* intel bar */
+.intel-bar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  background:var(--bg-card);border:0.5px solid var(--border-dim);
+  border-radius:8px;padding:10px 16px;flex-shrink:0;
+}
+.intel-bar span{font-size:11px;letter-spacing:1px;color:var(--text-muted);font-family:var(--mono);}
+
+/* results summary */
+.results-summary{
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:12px;flex-shrink:0;
+}
+.result-badge{
+  border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:6px;
+}
+.result-badge.found{background:var(--green-bg);border:1px solid var(--green-bdr);color:var(--green);}
+.result-badge.notfound{background:var(--red-bg);border:1px solid var(--red-bdr);color:var(--red);}
+.pdf-btn{
+  background:transparent;color:var(--text-accent);
+  padding:7px 18px;border-radius:8px;
+  border:0.5px solid var(--btn-border);
+  font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:6px;
+  transition:all .2s;
+}
+.pdf-btn:hover{background:#001628;}
+
+/* results grid */
+.results-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:12px;
+}
+.card{
+  background:var(--bg-card);border:0.5px solid var(--border-dim);
+  border-radius:10px;padding:16px;
+  transition:all .2s;animation:fadein .3s ease both;
+}
+.card:hover{border-color:#002e48;background:#000c14;}
+.card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.card-top h3{font-size:13px;font-weight:500;color:var(--text-bright);}
+.badge-found{
+  font-size:10px;padding:2px 10px;border-radius:20px;
+  background:var(--green-bg);color:var(--green);border:0.5px solid var(--green-bdr);
+  font-family:var(--mono);letter-spacing:.5px;
+}
+.badge-notfound{
+  font-size:10px;padding:2px 10px;border-radius:20px;
+  background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-bdr);
+  font-family:var(--mono);letter-spacing:.5px;
+}
+.conf-bar{background:#001525;height:2px;border-radius:2px;margin-bottom:8px;overflow:hidden;}
+.conf-fill{height:100%;border-radius:2px;background:var(--line);animation:grow 1s ease both .2s;}
+.confidence{font-size:11px;color:var(--text-muted);margin-bottom:10px;}
+.confidence strong{color:var(--text-accent)!important;font-weight:600;}
+.open-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;color:var(--text-accent);text-decoration:none;
+  border:0.5px solid var(--btn-border);border-radius:6px;
+  padding:4px 12px;transition:all .2s;
+}
+.open-btn:hover{background:#001628;}
+.no-profile{font-size:11px;color:var(--text-muted);}
+
+/* URL report */
+.url-report{
+  background:var(--bg-card);border:0.5px solid var(--border-dim);
+  border-radius:12px;padding:20px;
+}
+.url-report h3{font-size:14px;font-weight:500;color:var(--text-bright);margin-bottom:14px;}
+.url-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.url-cell{background:var(--bg3);border-radius:8px;padding:12px;}
+.url-cell-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:4px;font-family:var(--mono);}
+.url-cell-val{font-size:14px;color:var(--text-mid);}
+.url-cell-val.big{font-size:22px;font-weight:600;color:var(--text-accent);}
+.kw-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.kw-tag{font-size:11px;background:var(--bg3);color:var(--text2);padding:3px 10px;border-radius:999px;border:0.5px solid var(--border);}
+.url-preview{font-size:12px;color:var(--text-muted);line-height:1.7;background:var(--bg3);border-radius:8px;padding:12px;max-height:100px;overflow:hidden;}
+
+/* suggestions */
+#suggestions-box{
+  display:none;position:absolute;top:calc(100% + 4px);left:0;width:100%;
+  z-index:999;background:var(--bg2);
+  border:0.5px solid var(--border-md);border-radius:10px;
+  padding:6px 0;box-sizing:border-box;
+}
+.sug-label{font-size:10px;letter-spacing:1.5px;color:var(--text-muted);padding:4px 14px 6px;font-family:var(--mono);}
+.sug-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .15s;}
+.sug-item:hover{background:var(--bg3);}
+.sug-icon{width:28px;height:28px;border-radius:7px;background:var(--bg3);color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.sug-text{font-size:13px;color:var(--text-mid);}
+.sug-sub{font-size:11px;color:var(--text-muted);margin-top:1px;}
+.sug-clear{font-size:11px;color:var(--text-muted);padding:6px 14px 2px;text-align:right;cursor:pointer;border-top:0.5px solid var(--border);margin-top:4px;}
+.sug-clear:hover{color:var(--text-accent);}
+
+/* spinner */
+.fa-spin{animation:spin .8s linear infinite;display:inline-block;}
+
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .main-panel{padding:16px;}
+  .stats-grid{grid-template-columns:1fr 1fr;}
 }
 </style>
 </head>
 <body>
 <div class="osint-layout">
 
+  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-icon"></div>
-      <div><h2>OSINT</h2><span>PLATFORM</span></div>
+      <i class="ti ti-shield-search"></i>
+      <div class="brand-text">
+        <span class="brand-name">OSINT</span>
+        <div class="brand-sep"></div>
+        <span class="brand-sub">PLATFORM</span>
+      </div>
     </div>
-    <span class="nav-section">Main</span>
-    <div class="nav-item active"><i class="fa-solid fa-table-columns"></i> Dashboard</div>
-    <div class="nav-item"><i class="fa-solid fa-magnifying-glass"></i> Username Search</div>
-    <div class="nav-item"><i class="fa-solid fa-link"></i> URL Analyzer</div>
-    <div class="nav-item"><i class="fa-solid fa-share-nodes"></i> Social Search</div>
-    <div class="nav-item" onclick="location.href='/saved'"><i class="fa-solid fa-bookmark"></i> Saved Results</div>
-    <span class="nav-section">System</span>
-    <div class="nav-item"><i class="fa-solid fa-file-lines"></i> Reports</div>
-    <div class="nav-item"><i class="fa-solid fa-bell"></i> Alerts</div>
-    <div class="nav-item"><i class="fa-solid fa-code"></i> API Access</div>
+
+    <span class="nav-section">MAIN</span>
+    <div class="nav-item active"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+    <div class="nav-item"><i class="ti ti-user-search"></i> Username Search</div>
+    <div class="nav-item"><i class="ti ti-link"></i> URL Analyzer</div>
+    <div class="nav-item"><i class="ti ti-share"></i> Social Search</div>
+    <div class="nav-item" onclick="location.href='/saved'"><i class="ti ti-bookmark"></i> Saved Results</div>
+
+    <span class="nav-section">SYSTEM</span>
+    <div class="nav-item"><i class="ti ti-file-analytics"></i> Reports</div>
+    <div class="nav-item"><i class="ti ti-bell"></i> Alerts</div>
+    <div class="nav-item"><i class="ti ti-code"></i> API Access</div>
+
     <div class="side-bottom">
-      <div class="nav-item"><i class="fa-solid fa-gear"></i> Settings</div>
-      <div class="nav-item"><i class="fa-solid fa-circle-question"></i> Help Center</div>
+      <div class="nav-item"><i class="ti ti-settings"></i> Settings</div>
+      <div class="nav-item"><i class="ti ti-help-circle"></i> Help Center</div>
     </div>
   </aside>
 
+  <!-- MAIN -->
   <main class="main-panel">
-    <section class="hero">
-      <h1>OSINT <span>PLATFORM</span></h1>
-      <p>Intelligence · Social Search · URL Analyzer</p>
-    </section>
 
-   <form method="post" action="/" class="search-module" id="search-form">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div>
+        <div class="page-head-row">
+          <div class="page-title-main">OSINT</div>
+          <div class="page-vsep"></div>
+          <div class="page-title-tag">PLATFORM</div>
+        </div>
+        <div class="page-sub">Intelligence · Social Search · URL Analyzer</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        <span class="status-text">ENGINE ACTIVE</span>
+      </div>
+    </div>
+
+    <!-- Search Form -->
+    <form method="post" action="/" class="search-module" id="search-form">
       <input type="hidden" id="search_type" name="search_type" value="username">
       <div class="search-types">
-        <button type="button" class="type-btn active" onclick="setType(this,'username')"><i class="fa-solid fa-user" style="margin-right:6px;font-size:12px;"></i>Username</button>
-        <button type="button" class="type-btn" onclick="setType(this,'email')"><i class="fa-solid fa-envelope" style="margin-right:6px;font-size:12px;"></i>Email</button>
-        <button type="button" class="type-btn" onclick="setType(this,'phone')"><i class="fa-solid fa-phone" style="margin-right:6px;font-size:12px;"></i>Phone</button>
-        <button type="button" class="type-btn" onclick="setType(this,'domain')"><i class="fa-solid fa-globe" style="margin-right:6px;font-size:12px;"></i>Domain</button>
+        <button type="button" class="type-btn active" onclick="setType(this,'username')">
+          <i class="ti ti-user" style="font-size:12px;"></i> Username
+        </button>
+        <button type="button" class="type-btn" onclick="setType(this,'email')">
+          <i class="ti ti-mail" style="font-size:12px;"></i> Email
+        </button>
+        <button type="button" class="type-btn" onclick="setType(this,'phone')">
+          <i class="ti ti-phone" style="font-size:12px;"></i> Phone
+        </button>
+        <button type="button" class="type-btn" onclick="setType(this,'domain')">
+          <i class="ti ti-world" style="font-size:12px;"></i> Domain
+        </button>
       </div>
       <div class="search-row" style="position:relative;">
+        <i class="ti ti-search search-icon-wrap"></i>
         <input type="text" name="username" id="search-input" placeholder="Enter target..." required autocomplete="off">
         <button id="search-btn" type="submit">
-          <i class="fa-solid fa-magnifying-glass" id="search-icon"></i> <span id="search-label">Search</span>
+          <i class="ti ti-search" id="search-icon" style="font-size:14px;"></i>
+          <span id="search-label">Search</span>
         </button>
         <div id="suggestions-box"></div>
       </div>
       <div id="searching-msg">SCANNING PLATFORMS...</div>
     </form>
 
+    <!-- Scan Status -->
     <div class="scan-status">
       <div class="scan-line"></div>
       <span id="scan-text">ANALYZING DIGITAL FOOTPRINT...</span>
+      <div class="scan-line"></div>
     </div>
 
+    <!-- Intel Bar -->
     {% if username %}
     <div class="intel-bar">
       <span>⬤ ENGINE: ACTIVE</span>
@@ -139,13 +366,20 @@
     </div>
     {% endif %}
 
+    <!-- Results -->
     {% if results %}
-    <div style="display:flex;align-items:center;justify-content:space-between;max-width:700px;margin:0 auto;width:100%;gap:12px;">
+    <div class="results-summary">
       <div style="display:flex;gap:10px;">
-        <div style="background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:8px;padding:8px 18px;font-size:13px;color:var(--green);font-weight:600;"><i class="fa-solid fa-circle-check" style="margin-right:6px;"></i>{{ found_count }} Found</div>
-        <div style="background:var(--red-bg);border:1px solid var(--red-bdr);border-radius:8px;padding:8px 18px;font-size:13px;color:var(--red);font-weight:600;"><i class="fa-solid fa-circle-xmark" style="margin-right:6px;"></i>{{ notfound_count }} Not Found</div>
+        <div class="result-badge found">
+          <i class="ti ti-circle-check"></i> {{ found_count }} Found
+        </div>
+        <div class="result-badge notfound">
+          <i class="ti ti-circle-x"></i> {{ notfound_count }} Not Found
+        </div>
       </div>
-      <a class="pdf-btn" href="/report?target={{ username }}&search_type={{ search_type }}" target="_blank">Export PDF Report</a>
+      <a class="pdf-btn" href="/report?target={{ username }}&search_type={{ search_type }}" target="_blank">
+        <i class="ti ti-file-export" style="font-size:13px;"></i> Export PDF Report
+      </a>
     </div>
     <div class="results-grid">
       {% for item in results %}
@@ -154,10 +388,14 @@
           <h3>{{ item.site }}</h3>
           <span class="{% if item.status == 'FOUND' %}badge-found{% else %}badge-notfound{% endif %}">{{ item.status }}</span>
         </div>
-        <div class="conf-bar"><div class="conf-fill" style="width:{{ item.confidence }}%;"></div></div>
-        <p class="confidence"><strong style="color:var(--text);font-weight:600;">{{ item.confidence }}%</strong> confidence — {{ item.label }}</p>
+        <div class="conf-bar">
+          <div class="conf-fill" style="--w:{{ item.confidence }}%;"></div>
+        </div>
+        <p class="confidence"><strong>{{ item.confidence }}%</strong> confidence — {{ item.label }}</p>
         {% if item.url != "#" and item.status == "FOUND" %}
-          <a href="{{ item.url }}" class="open-btn" target="_blank">Open Profile</a>
+          <a href="{{ item.url }}" class="open-btn" target="_blank">
+            <i class="ti ti-external-link" style="font-size:11px;"></i> Open Profile
+          </a>
         {% else %}
           <span class="no-profile">No external profile</span>
         {% endif %}
@@ -166,29 +404,32 @@
     </div>
     {% endif %}
 
+    <!-- URL Report -->
     {% if report and report.enabled %}
-    <div style="max-width:700px;margin:0 auto;width:100%;background:var(--bg2);border:1px solid var(--border-md);border-radius:var(--radius-lg);padding:24px;">
-      <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;color:var(--text);"><i class="fa-solid fa-link" style="color:var(--accent);margin-right:8px;"></i>URL Analysis</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div style="background:var(--bg3);border-radius:8px;padding:12px;">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;letter-spacing:1px;">PAGE TITLE</div>
-          <div style="font-size:14px;color:var(--text);">{{ report.title }}</div>
+    <div class="url-report">
+      <h3><i class="ti ti-link" style="color:var(--text-accent);margin-right:8px;"></i>URL Analysis</h3>
+      <div class="url-grid">
+        <div class="url-cell">
+          <div class="url-cell-label">PAGE TITLE</div>
+          <div class="url-cell-val">{{ report.title }}</div>
         </div>
-        <div style="background:var(--bg3);border-radius:8px;padding:12px;">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;letter-spacing:1px;">LINKS FOUND</div>
-          <div style="font-size:22px;font-weight:600;color:var(--accent);">{{ report.links }}</div>
+        <div class="url-cell">
+          <div class="url-cell-label">LINKS FOUND</div>
+          <div class="url-cell-val big">{{ report.links }}</div>
         </div>
       </div>
       {% if report.keywords %}
-      <div style="margin-bottom:12px;">
-        <div style="font-size:11px;color:var(--text3);letter-spacing:1px;margin-bottom:8px;">KEYWORDS</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          {% for kw in report.keywords %}<span style="font-size:12px;background:var(--bg3);color:var(--text2);padding:3px 10px;border-radius:999px;border:1px solid var(--border);">{{ kw }}</span>{% endfor %}
+      <div style="margin-bottom:10px;">
+        <div class="url-cell-label" style="margin-bottom:8px;">KEYWORDS</div>
+        <div class="kw-row">
+          {% for kw in report.keywords %}
+          <span class="kw-tag">{{ kw }}</span>
+          {% endfor %}
         </div>
       </div>
       {% endif %}
       {% if report.preview %}
-      <div style="font-size:12.5px;color:var(--text3);line-height:1.7;background:var(--bg3);border-radius:8px;padding:12px;max-height:100px;overflow:hidden;">{{ report.preview }}</div>
+      <div class="url-preview">{{ report.preview }}</div>
       {% endif %}
     </div>
     {% endif %}
@@ -198,100 +439,78 @@
 
 <script>
 const scanMessages = {
-  username: ["SCANNING SOCIAL PLATFORMS...","VERIFYING USERNAME SIGNALS...","ANALYZING DIGITAL FOOTPRINT...","BUILDING INTELLIGENCE VIEW..."],
-  email:    ["VALIDATING EMAIL STRUCTURE...","CHECKING EMAIL DOMAIN...","ANALYZING EMAIL INTELLIGENCE...","BUILDING EMAIL REPORT..."],
-  phone:    ["VALIDATING PHONE FORMAT...","CHECKING COUNTRY CODE...","ANALYZING PHONE INTELLIGENCE...","BUILDING PHONE REPORT..."],
-  domain:   ["VALIDATING DOMAIN STRUCTURE...","CHECKING DNS RECORDS...","SCANNING DOMAIN INTELLIGENCE...","BUILDING DOMAIN REPORT..."]
+  username:["SCANNING SOCIAL PLATFORMS...","VERIFYING USERNAME SIGNALS...","ANALYZING DIGITAL FOOTPRINT...","BUILDING INTELLIGENCE VIEW..."],
+  email:   ["VALIDATING EMAIL STRUCTURE...","CHECKING EMAIL DOMAIN...","ANALYZING EMAIL INTELLIGENCE...","BUILDING EMAIL REPORT..."],
+  phone:   ["VALIDATING PHONE FORMAT...","CHECKING COUNTRY CODE...","ANALYZING PHONE INTELLIGENCE...","BUILDING PHONE REPORT..."],
+  domain:  ["VALIDATING DOMAIN STRUCTURE...","CHECKING DNS RECORDS...","SCANNING DOMAIN INTELLIGENCE...","BUILDING DOMAIN REPORT..."]
 };
-let idx = 0;
-const scanText = document.getElementById('scan-text');
-const typeInput = document.getElementById('search_type');
-setInterval(() => {
-  const type = typeInput.value || 'username';
-  const msgs = scanMessages[type] || scanMessages.username;
-  idx = (idx + 1) % msgs.length;
-  if (scanText) scanText.textContent = msgs[idx];
-}, 1800);
+let idx=0;
+const scanText=document.getElementById('scan-text');
+const typeInput=document.getElementById('search_type');
+setInterval(()=>{
+  const msgs=scanMessages[typeInput.value]||scanMessages.username;
+  idx=(idx+1)%msgs.length;
+  if(scanText)scanText.textContent=msgs[idx];
+},1800);
 
-function setType(btn, type) {
-  typeInput.value = type;
-  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+function setType(btn,type){
+  typeInput.value=type;
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  idx = 0;
-  if (scanText) scanText.textContent = (scanMessages[type] || scanMessages.username)[0];
-  const placeholders = { username:'Enter username...', email:'Enter email address...', phone:'Enter phone number (+966...)', domain:'Enter domain (example.com)' };
-  const inp = document.getElementById('search-input');
-  if (inp) inp.placeholder = placeholders[type] || 'Enter target...';
+  idx=0;
+  if(scanText)scanText.textContent=(scanMessages[type]||scanMessages.username)[0];
+  const ph={username:'Enter username...',email:'Enter email address...',phone:'Enter phone number (+966...)',domain:'Enter domain (example.com)'};
+  const inp=document.getElementById('search-input');
+  if(inp)inp.placeholder=ph[type]||'Enter target...';
 }
 
-// ─── Recent Searches ───────────────────────────────────────────
-const STORAGE_KEY = 'osint_recent';
-const sugInput = document.getElementById('search-input');
-const sugBox   = document.getElementById('suggestions-box');
+// Recent Searches
+const STORAGE_KEY='osint_recent';
+const sugInput=document.getElementById('search-input');
+const sugBox=document.getElementById('suggestions-box');
 
-function getRecent() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-  catch { return []; }
-}
-
-function saveRecent(val) {
-  let list = getRecent().filter(x => x.value !== val);
-  list.unshift({ value: val, date: Date.now() });
-  list = list.slice(0, 5);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
-
-function clearRecent() {
-  localStorage.removeItem(STORAGE_KEY);
-  sugBox.style.display = 'none';
-}
-
-function timeAgo(ts) {
-  const diff = Math.floor((Date.now() - ts) / 86400000);
-  if (diff === 0) return 'today';
-  if (diff === 1) return '1 day ago';
-  return diff + ' days ago';
-}
-
-function showRecent() {
-  const list = getRecent();
-  if (!list.length) { sugBox.style.display = 'none'; return; }
-  sugBox.innerHTML =
-    '<div class="sug-label">Recent</div>' +
-    list.map(r =>
-      `<div class="sug-item" onclick="pickRecent('${r.value.replace(/'/g,"\\'")}')">
-        <div class="sug-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-        <div>
-          <div class="sug-text">${r.value}</div>
-          <div class="sug-sub">${timeAgo(r.date)}</div>
-        </div>
-      </div>`
-    ).join('') +
+function getRecent(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[];}catch{return[];}}
+function saveRecent(val){let l=getRecent().filter(x=>x.value!==val);l.unshift({value:val,date:Date.now()});l=l.slice(0,5);localStorage.setItem(STORAGE_KEY,JSON.stringify(l));}
+function clearRecent(){localStorage.removeItem(STORAGE_KEY);sugBox.style.display='none';}
+function timeAgo(ts){const d=Math.floor((Date.now()-ts)/86400000);if(d===0)return'today';if(d===1)return'1 day ago';return d+' days ago';}
+function showRecent(){
+  const list=getRecent();
+  if(!list.length){sugBox.style.display='none';return;}
+  sugBox.innerHTML=
+    '<div class="sug-label">RECENT</div>'+
+    list.map(r=>`<div class="sug-item" onclick="pickRecent('${r.value.replace(/'/g,"\\'")}')">
+      <div class="sug-icon"><i class="ti ti-clock-hour-4"></i></div>
+      <div><div class="sug-text">${r.value}</div><div class="sug-sub">${timeAgo(r.date)}</div></div>
+    </div>`).join('')+
     '<div class="sug-clear" onclick="clearRecent()">Clear history</div>';
-  sugBox.style.display = 'block';
+  sugBox.style.display='block';
 }
+function pickRecent(val){sugInput.value=val;sugBox.style.display='none';}
 
-function pickRecent(val) {
-  sugInput.value = val;
-  sugBox.style.display = 'none';
-}
-
-sugInput.addEventListener('focus', showRecent);
-
-document.addEventListener('click', function(e) {
-  if (!sugBox.contains(e.target) && e.target !== sugInput)
-    sugBox.style.display = 'none';
+sugInput.addEventListener('focus',showRecent);
+document.addEventListener('click',function(e){
+  if(!sugBox.contains(e.target)&&e.target!==sugInput)sugBox.style.display='none';
 });
 
-// ─── Form Submit ────────────────────────────────────────────────
-document.getElementById('search-form').addEventListener('submit', function() {
-  const target = sugInput.value.trim();
-  if (!target) return;
-  saveRecent(target);
+// Form Submit
+document.getElementById('search-form').addEventListener('submit',function(){
+  const t=sugInput.value.trim();
+  if(!t)return;
+  saveRecent(t);
   document.getElementById('search-btn').classList.add('searching');
-  document.getElementById('search-icon').className = 'fa-solid fa-spinner fa-spin';
-  document.getElementById('search-label').textContent = 'Searching...';
+  document.getElementById('search-icon').className='ti ti-loader fa-spin';
+  document.getElementById('search-label').textContent='Searching...';
   document.getElementById('searching-msg').classList.add('active');
+});
+
+// Nav active state
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',function(){
+    if(!this.getAttribute('onclick')){
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      this.classList.add('active');
+    }
+  });
 });
 </script>
 </body>
