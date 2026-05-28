@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Analysis — OSINT Platform</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font-sans:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
+  --bg:#000810; --bg-side:#00040a; --bg-card:#00080e;
+  --border:#001828; --border-f:#001525;
+  --accent:#56b8d8; --bright:#bae6fd; --muted:#003050; --sep:#2a7d9c; --line:#1a6a8a;
+  --btn:#0f4a62;
+  --green:#22c55e; --green-bg:rgba(34,197,94,.08); --green-bdr:rgba(34,197,94,.2);
+  --red:#ef4444; --red-bg:rgba(239,68,68,.08); --red-bdr:rgba(239,68,68,.2);
+  --yellow:#f59e0b; --yellow-bg:rgba(245,158,11,.08); --yellow-bdr:rgba(245,158,11,.2);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg);font-family:var(--font-sans);color:#a8d8ee;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes fadein{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes glowline{0%,100%{opacity:.22}50%{opacity:.42}}
+@keyframes btnpulse{0%,100%{box-shadow:0 0 0 0 rgba(14,165,212,0);border-color:#0f4a62}50%{box-shadow:0 0 7px 1px rgba(14,165,212,.18);border-color:#1a6a8a}}
+@keyframes grow{0%{width:0}100%{width:var(--w,0%)}}
+
+.layout{display:flex;height:100vh;overflow:hidden;}
+.sidebar{width:220px;flex-shrink:0;background:var(--bg-side);padding:22px 12px;display:flex;flex-direction:column;position:relative;border-right:0.5px solid var(--border-f);}
+.sidebar::after{content:'';position:absolute;top:8%;right:0;width:1px;height:84%;background:linear-gradient(to bottom,transparent,#1e7a96 38%,#1e7a96 62%,transparent);opacity:.28;animation:glowline 4s ease-in-out infinite;}
+.brand{display:flex;align-items:center;gap:8px;padding:0 6px 24px;}
+.brand i{color:var(--accent);font-size:22px;}
+.brand-text{display:flex;align-items:center;gap:6px;}
+.brand-name{color:var(--bright);font-size:18px;font-weight:500;letter-spacing:-.3px;}
+.brand-sep{width:1px;height:16px;background:var(--line);}
+.brand-sub{color:var(--sep);font-size:10px;letter-spacing:1.5px;font-family:var(--font-mono);}
+.nav-section{display:block;color:var(--muted);font-size:10px;letter-spacing:1.2px;padding:0 6px 7px;margin-top:6px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;cursor:pointer;transition:all .2s;border:0.5px solid transparent;color:var(--muted);font-size:12.5px;text-decoration:none;}
+.nav-item i{font-size:15px;color:var(--muted);}
+.nav-item:hover{background:#001522;color:#3a8faa;}
+.nav-item:hover i{color:#3a8faa;}
+.nav-item.active{background:#001e30;border-color:#002e48;color:var(--accent);}
+.nav-item.active i{color:var(--accent);}
+.side-bottom{margin-top:auto;border-top:0.5px solid var(--border-f);padding-top:12px;display:flex;flex-direction:column;gap:2px;}
+
+.main{flex:1;background:var(--bg);padding:28px 32px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;min-width:0;}
+.topbar{display:flex;align-items:center;justify-content:space-between;}
+.page-head{display:flex;align-items:center;gap:8px;}
+.page-title{font-size:28px;font-weight:500;color:var(--bright);letter-spacing:-.5px;}
+.page-vsep{width:1px;height:22px;background:var(--line);}
+.page-tag{font-size:13px;color:var(--sep);letter-spacing:2px;font-family:var(--font-mono);}
+.page-sub{color:var(--muted);font-size:11px;margin-top:3px;}
+.status-pill{display:flex;align-items:center;gap:6px;border:0.5px solid var(--border);border-radius:20px;padding:5px 14px;background:var(--bg-card);}
+.status-dot{width:6px;height:6px;border-radius:50%;background:#0ea5d4;animation:pulse 2s infinite;}
+.status-text{color:var(--muted);font-size:11px;letter-spacing:.8px;}
+
+/* UPLOAD ZONE */
+.upload-zone{
+  background:var(--bg-card);border:0.5px dashed var(--btn);border-radius:12px;
+  padding:40px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;cursor:pointer;transition:all .2s;position:relative;
+}
+.upload-zone:hover{border-color:var(--accent);background:#000c14;}
+.upload-zone.dragover{border-color:var(--accent);background:#001020;}
+.upload-zone input[type=file]{display:none;}
+.upload-icon{width:56px;height:56px;border-radius:14px;background:#001628;border:0.5px solid var(--btn);display:flex;align-items:center;justify-content:center;}
+.upload-icon i{color:var(--accent);font-size:24px;}
+.upload-title{color:var(--bright);font-size:15px;font-weight:500;}
+.upload-sub{color:var(--muted);font-size:12px;font-family:var(--font-mono);}
+.upload-btn{
+  background:transparent;color:var(--accent);padding:9px 28px;border-radius:8px;
+  border:0.5px solid var(--btn);font-size:13px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;font-weight:500;
+  animation:btnpulse 2.8s ease-in-out infinite;font-family:var(--font-sans);
+  margin-top:4px;
+}
+
+/* DISCLAIMER */
+.disclaimer{background:#000c14;border:0.5px solid #001828;border-radius:8px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;}
+.disclaimer i{color:#f59e0b;font-size:16px;flex-shrink:0;margin-top:1px;}
+.disclaimer p{font-size:11px;color:var(--muted);line-height:1.7;font-family:var(--font-mono);}
+
+/* RESULTS */
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;animation:fadein .4s ease both;}
+.result-card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:10px;padding:18px;}
+.result-card.full{grid-column:1/-1;}
+.rc-label{font-size:10px;letter-spacing:1px;color:var(--muted);font-family:var(--font-mono);margin-bottom:12px;}
+.rc-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border-f);}
+.rc-row:last-child{border-bottom:none;}
+.rc-key{font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+.rc-val{font-size:12px;color:var(--accent);}
+
+/* GPS */
+.gps-card{background:var(--bg-card);border:0.5px solid var(--green-bdr);border-radius:10px;padding:18px;}
+.gps-coords{font-size:22px;font-weight:500;color:var(--green);font-family:var(--font-mono);margin:8px 0;}
+.gps-btn{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;border:0.5px solid var(--btn);border-radius:6px;padding:6px 16px;font-size:12px;transition:all .2s;margin-top:8px;}
+.gps-btn:hover{background:#001628;}
+.no-gps{color:var(--muted);font-size:12px;font-family:var(--font-mono);margin-top:6px;}
+
+/* AI VERDICT */
+.ai-verdict-box{border-radius:10px;padding:18px;}
+.ai-score-bar{background:#001525;height:6px;border-radius:6px;margin:10px 0;overflow:hidden;}
+.ai-score-fill{height:100%;border-radius:6px;animation:grow 1s ease both .3s;}
+.ai-indicator{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border-f);font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+.ai-indicator:last-child{border-bottom:none;}
+.ai-indicator i{font-size:13px;flex-shrink:0;margin-top:1px;}
+
+/* ERROR */
+.error-box{background:var(--red-bg);border:0.5px solid var(--red-bdr);border-radius:8px;padding:14px 18px;display:flex;align-items:center;gap:10px;color:var(--red);font-size:13px;}
+
+@media(max-width:768px){.sidebar{display:none;}.main{padding:16px;}.result-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <i class="ti ti-shield-search"></i>
+      <div class="brand-text">
+        <span class="brand-name">OSINT</span>
+        <div class="brand-sep"></div>
+        <span class="brand-sub">PLATFORM</span>
+      </div>
+    </div>
+    <span class="nav-section">MAIN</span>
+    <a href="/" class="nav-item"><i class="ti ti-layout-dashboard"></i> Dashboard</a>
+    <a href="/" class="nav-item"><i class="ti ti-user-search"></i> Username Search</a>
+    <a href="/" class="nav-item"><i class="ti ti-link"></i> URL Analyzer</a>
+    <a href="/" class="nav-item"><i class="ti ti-share"></i> Social Search</a>
+    <a href="/saved" class="nav-item"><i class="ti ti-bookmark"></i> Saved Results</a>
+    <a href="/image-analysis" class="nav-item active"><i class="ti ti-camera-search"></i> Image Analysis</a>
+    <span class="nav-section">SYSTEM</span>
+    <a href="/" class="nav-item"><i class="ti ti-file-analytics"></i> Reports</a>
+    <a href="/" class="nav-item"><i class="ti ti-bell"></i> Alerts</a>
+    <a href="/" class="nav-item"><i class="ti ti-code"></i> API Access</a>
+    <div class="side-bottom">
+      <a href="/" class="nav-item"><i class="ti ti-settings"></i> Settings</a>
+      <a href="/" class="nav-item"><i class="ti ti-help-circle"></i> Help Center</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div>
+        <div class="page-head">
+          <div class="page-title">IMAGE</div>
+          <div class="page-vsep"></div>
+          <div class="page-tag">ANALYSIS</div>
+        </div>
+        <div class="page-sub">EXIF Metadata · GPS Location · AI Detection</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        <span class="status-text">ENGINE ACTIVE</span>
+      </div>
+    </div>
+
+    <!-- DISCLAIMER -->
+    <div class="disclaimer">
+      <i class="ti ti-shield-check"></i>
+      <p>FOR AUTHORIZED USE ONLY — This tool extracts publicly available metadata from images. Use only on images you own or have legal authorization to analyze. All analysis is performed locally on the server.</p>
+    </div>
+
+    <!-- ERROR -->
+    {% if error %}
+    <div class="error-box">
+      <i class="ti ti-alert-circle" style="font-size:18px;"></i>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- UPLOAD FORM -->
+    <form method="post" action="/image-analysis" enctype="multipart/form-data" id="upload-form">
+      <div class="upload-zone" id="drop-zone">
+        <input type="file" name="image" accept="image/*" id="file-input" onchange="handleFile(this)">
+        <div class="upload-icon"><i class="ti ti-photo-search"></i></div>
+        <div class="upload-title" id="upload-title">Drop image here or click to browse</div>
+        <div class="upload-sub">JPG · PNG · WEBP · TIFF · max 10MB</div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button type="button" class="upload-btn" onclick="document.getElementById('file-input').click()">
+            <i class="ti ti-folder-open"></i> Browse
+          </button>
+          <button type="submit" class="upload-btn" id="submit-btn">
+            <i class="ti ti-scan"></i> Analyze Image
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- RESULTS -->
+    {% if result %}
+    <div class="result-grid">
+
+      <!-- FILE INFO -->
+      <div class="result-card">
+        <div class="rc-label">FILE INFORMATION</div>
+        <div class="rc-row"><span class="rc-key">FILENAME</span><span class="rc-val">{{ result.filename or '—' }}</span></div>
+        <div class="rc-row"><span class="rc-key">FORMAT</span><span class="rc-val">{{ result.format or '—' }}</span></div>
+        <div class="rc-row"><span class="rc-key">DIMENSIONS</span><span class="rc-val">{{ result.dimensions or '—' }}</span></div>
+        <div class="rc-row"><span class="rc-key">SIZE</span><span class="rc-val">{{ result.size_kb }} KB</span></div>
+        <div class="rc-row"><span class="rc-key">EXIF DATA</span>
+          <span class="rc-val" style="color:{% if result.exif_found %}#22c55e{% else %}#ef4444{% endif %};">
+            {{ 'FOUND' if result.exif_found else 'NOT FOUND' }}
+          </span>
+        </div>
+      </div>
+
+      <!-- CAMERA INFO -->
+      <div class="result-card">
+        <div class="rc-label">CAMERA & DEVICE</div>
+        {% if result.camera %}
+          {% for key, val in result.camera.items() %}
+          <div class="rc-row"><span class="rc-key">{{ key.upper() }}</span><span class="rc-val">{{ val[:40] }}</span></div>
+          {% endfor %}
+        {% else %}
+          <div style="color:var(--muted);font-size:12px;font-family:var(--font-mono);">No camera data found</div>
+        {% endif %}
+        {% if result.datetime %}
+        <div class="rc-row" style="margin-top:8px;"><span class="rc-key">DATE TAKEN</span><span class="rc-val">{{ result.datetime }}</span></div>
+        {% endif %}
+      </div>
+
+      <!-- GPS -->
+      <div class="result-card {% if result.gps %}gps-card{% endif %}">
+        <div class="rc-label">GPS LOCATION</div>
+        {% if result.gps %}
+          <div class="gps-coords">{{ result.gps.lat }}, {{ result.gps.lon }}</div>
+          {% if result.location %}
+            {% if result.location.road %}
+            <div class="rc-row"><span class="rc-key">ROAD</span><span class="rc-val">{{ result.location.road }}</span></div>
+            {% endif %}
+            {% if result.location.city %}
+            <div class="rc-row"><span class="rc-key">CITY</span><span class="rc-val">{{ result.location.city }}</span></div>
+            {% endif %}
+            {% if result.location.state %}
+            <div class="rc-row"><span class="rc-key">STATE</span><span class="rc-val">{{ result.location.state }}</span></div>
+            {% endif %}
+            {% if result.location.country %}
+            <div class="rc-row"><span class="rc-key">COUNTRY</span><span class="rc-val">{{ result.location.country }} {{ result.location.country_code }}</span></div>
+            {% endif %}
+            {% if result.location.postcode %}
+            <div class="rc-row"><span class="rc-key">POSTCODE</span><span class="rc-val">{{ result.location.postcode }}</span></div>
+            {% endif %}
+          {% else %}
+            <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);">Coordinates extracted from EXIF metadata</div>
+          {% endif %}
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <a href="{{ result.map_url }}" class="gps-btn" target="_blank">
+              <i class="ti ti-map-pin" style="font-size:13px;"></i> Open in Google Maps
+            </a>
+            <a href="/image-report?filename={{ result.filename }}&lat={{ result.gps.lat }}&lon={{ result.gps.lon }}" class="gps-btn" target="_blank">
+              <i class="ti ti-file-export" style="font-size:13px;"></i> Export PDF
+            </a>
+          </div>
+        {% else %}
+          <div style="color:var(--muted);font-size:40px;margin:8px 0;">📍</div>
+          <div class="no-gps">No GPS coordinates found in this image.<br>GPS data may have been stripped or was never present.</div>
+        {% endif %}
+      </div>
+
+      <!-- AI DETECTION -->
+      <div class="result-card" style="border-color:{{ result.ai_verdict_color }}33;">
+        <div class="rc-label">AI DETECTION</div>
+        <div style="font-size:18px;font-weight:600;color:{{ result.ai_verdict_color }};margin-bottom:4px;">
+          {{ result.ai_verdict }}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Confidence Score: {{ result.ai_score }}%</div>
+        <div class="ai-score-bar">
+          <div class="ai-score-fill" style="--w:{{ result.ai_score }}%;background:{{ result.ai_verdict_color }};"></div>
+        </div>
+        {% if result.ai_indicators %}
+          <div style="margin-top:10px;">
+            {% for ind in result.ai_indicators %}
+            <div class="ai-indicator">
+              <i class="ti ti-point-filled" style="color:{{ result.ai_verdict_color }};"></i>
+              {{ ind }}
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div style="color:var(--muted);font-size:11px;font-family:var(--font-mono);margin-top:8px;">No suspicious indicators found</div>
+        {% endif %}
+      </div>
+
+    </div>
+    {% endif %}
+
+  </main>
+</div>
+
+<script>
+function handleFile(input) {
+  if (input.files && input.files[0]) {
+    document.getElementById('upload-title').textContent = input.files[0].name;
+  }
+}
+const zone = document.getElementById('drop-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    document.getElementById('file-input').files = e.dataTransfer.files;
+    document.getElementById('upload-title').textContent = file.name;
+  }
+});
+document.getElementById('upload-form').addEventListener('submit', () => {
+  document.getElementById('submit-btn').innerHTML = '<i class="ti ti-loader" style="animation:spin .8s linear infinite;display:inline-block;"></i> Analyzing...';
+});
+</script>
+</body>
+</html>

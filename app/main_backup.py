@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Request, Form, UploadFile, File
+from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,9 +14,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import os
-import io
-from PIL import Image
-from PIL.ExifTags import TAGS, GPSTAGS
 from app.database import save_search, get_all_searches, get_search_by_id, delete_search, get_stats
 from app.auth import (
     login, logout, require_auth, require_admin,
@@ -25,6 +22,8 @@ from app.auth import (
     get_current_user
 )
 
+# ─────────────────────────────────────────
+# PDF GENERATOR
 # ─────────────────────────────────────────
 # PDF GENERATOR
 # ─────────────────────────────────────────
@@ -120,6 +119,7 @@ def generate_pdf_report(target, search_type, results):
         ("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ROWBACKGROUNDS",(0,0),(-1,-1),[WHITE,LIGHT_GREY,WHITE])]))
     story.append(meta_t)
     story+=section("1","Executive Summary")
+    confirmed_platforms=", ".join(r["site"] for r in results if r["status"]=="FOUND")
     story.append(Paragraph(
         f"OSINT assessment on <b>{target}</b>. Covered <b>{N_TOTAL}</b> sources. "
         f"<b>{N_FOUND} confirmed indicators</b>. Risk: <b>{RISK}</b>. Confidence: <b>{SCORE}%</b>.",s_body))
@@ -172,6 +172,9 @@ def cleanup_reports():
             pass
 cleanup_reports()
 
+# ─────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.4 Safari/605.1.15",
@@ -179,6 +182,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
 ]
 
+# المنصات + طريقة الفحص لكل واحدة
 SOCIAL_PLATFORMS = [
     {"site": "Instagram",   "url": "https://www.instagram.com/{}/",       "method": "http"},
     {"site": "Twitter",     "url": "https://x.com/{}",                    "method": "api"},
@@ -194,6 +198,7 @@ SOCIAL_PLATFORMS = [
     {"site": "Gravatar",    "url": "https://gravatar.com/{}",             "method": "api"},
 ]
 
+# إشارات "مو موجود" لكل منصة
 NOT_FOUND_SIGNALS = {
     "Instagram":  ["page not found", "sorry, this page", "pagenotfound"],
     "Twitter":    ["this account doesn't exist", "account suspended", "page doesn't exist", "sorry, that page doesn't exist", "this account has been suspended"],
@@ -208,6 +213,7 @@ NOT_FOUND_SIGNALS = {
     "Pastebin":   ["not found", "unknown user", "no pastes"],
 }
 
+# إشارات "موجود" — أدق من مجرد 200
 FOUND_SIGNALS = {
     "Instagram":  ["og:type", "profile", "followers"],
     "Twitter":    ["og:title", "twitter:title", "tweets"],
@@ -222,7 +228,12 @@ FOUND_SIGNALS = {
     "Pastebin":   ["public pastes", "pastebin", "recent pastes"],
 }
 
+
+# ─────────────────────────────────────────
+# APIs مجانية — دقيقة 100%
+# ─────────────────────────────────────────
 def api_check_twitter(username):
+    # نستخدم nitter كـ proxy مفتوح المصدر — أدق من x.com مباشرة
     mirrors = [
         f"https://nitter.poast.org/{username}",
         f"https://nitter.privacydev.net/{username}",
@@ -243,6 +254,7 @@ def api_check_twitter(username):
         except Exception:
             continue
     return False, 0, ""
+
 
 def api_check_github(username):
     try:
@@ -282,6 +294,9 @@ def api_check_reddit(username):
     except Exception:
         return False, 0, ""
 
+    except Exception:
+        return False, 0, ""
+
 def api_check_gravatar(username):
     try:
         email_hash = hashlib.md5(username.lower().strip().encode()).hexdigest()
@@ -303,6 +318,10 @@ def api_check_gravatar(username):
     except Exception:
         return False, 0, "", ""
 
+
+# ─────────────────────────────────────────
+# HTTP Check — لكل المنصات الأخرى
+# ─────────────────────────────────────────
 def http_check(site, url):
     headers = {
         "User-Agent":      random.choice(USER_AGENTS),
@@ -312,15 +331,24 @@ def http_check(site, url):
     }
     try:
         r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+
+        # 404 = مو موجود قطعاً
         if r.status_code == 404:
             return False, 0, ""
+
+        # المنصة محجبت الطلب — نتجاهل بدل false positive
         if r.status_code in [401, 403, 429, 999]:
             return False, 0, ""
+
         if r.status_code == 200:
             body = r.text.lower()
+
+            # فحص negative أولاً
             for sig in NOT_FOUND_SIGNALS.get(site, []):
                 if sig in body:
                     return False, 0, ""
+
+            # فحص positive
             pos = FOUND_SIGNALS.get(site, [])
             if pos:
                 hits = sum(1 for s in pos if s in body)
@@ -328,18 +356,31 @@ def http_check(site, url):
                     conf = min(60 + hits * 10, 95)
                     return True, conf, "Public Profile Detected"
                 return False, 0, ""
+
             return True, 75, "Public Profile Detected"
+
     except Exception:
         pass
     return False, 0, ""
 
+
+# ─────────────────────────────────────────
+# فحص منصة واحدة
+# ─────────────────────────────────────────
 def check_platform(p, username):
     site   = p["site"]
     url    = p["url"].format(username)
     method = p["method"]
+
+    # skip = Facebook وأمثاله يعيدون توجيه لنتائج خاطئة — نعطي رابط فقط
     if method == "skip":
-        return {"site": site, "url": url, "status": "NOT FOUND", "confidence": 0,
-                "label": "فحص يدوي مطلوب", "source": "Manual Check Required"}
+        return {
+            "site": site, "url": url,
+            "status": "NOT FOUND", "confidence": 0,
+            "label": "فحص يدوي مطلوب — اضغط الرابط للتحقق",
+            "source": "Manual Check Required",
+        }
+
     if method == "api":
         if site == "Twitter":
             found, conf, label = api_check_twitter(username)
@@ -356,16 +397,30 @@ def check_platform(p, username):
             found, conf, label = False, 0, ""
     else:
         found, conf, label = http_check(site, url)
+
     if not label and found:
         label = "Public Presence Detected"
-    return {"site": site, "url": url, "status": "FOUND" if found else "NOT FOUND",
-            "confidence": conf, "label": label if found else "No Public Evidence Found", "source": "OSINT Direct"}
 
+    return {
+        "site":       site,
+        "url":        url,
+        "status":     "FOUND" if found else "NOT FOUND",
+        "confidence": conf,
+        "label":      label if found else "No Public Evidence Found",
+        "source":     "OSINT Direct",
+    }
+
+
+# ─────────────────────────────────────────
+# EMAIL CHAINING — يربط الهوية تلقائياً
+# ─────────────────────────────────────────
 def chain_email_intel(email, source_site):
     chain_results = []
     if not email or "@" not in email:
         return chain_results
     domain = email.split("@")[-1].lower()
+
+    # Gravatar
     try:
         email_hash = hashlib.md5(email.lower().strip().encode()).hexdigest()
         r = requests.get(f"https://www.gravatar.com/{email_hash}.json",
@@ -377,26 +432,45 @@ def chain_email_intel(email, source_site):
             if d.get("currentLocation"):  label += f" | 📍 {d['currentLocation']}"
             accounts = [a.get("name","") for a in d.get("accounts",[])[:3]]
             if accounts: label += f" | Linked: {', '.join(accounts)}"
-            chain_results.append({"site": "Gravatar (Auto-Chain)",
+            chain_results.append({
+                "site": "Gravatar (Auto-Chain)",
                 "url": f"https://www.gravatar.com/avatar/{email_hash}",
-                "status": "FOUND", "confidence": 92, "label": label, "source": f"Chained from {source_site}"})
+                "status": "FOUND", "confidence": 92,
+                "label": label, "source": f"Chained from {source_site}",
+            })
     except Exception:
         pass
+
+    # HIBP
     hibp_key = os.getenv("HIBP_API_KEY")
     if hibp_key:
         try:
-            r = requests.get(f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
-                             headers={"hibp-api-key": hibp_key, "User-Agent": "OSINT-Platform"},
-                             params={"truncateResponse": "false"}, timeout=10)
+            r = requests.get(
+                f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
+                headers={"hibp-api-key": hibp_key, "User-Agent": "OSINT-Platform"},
+                params={"truncateResponse": "false"}, timeout=10)
             if r.status_code == 200:
                 breaches = r.json()
                 names = ", ".join(b.get("Name","") for b in breaches[:4])
-                chain_results.append({"site": "HIBP (Auto-Chain)", "url": "https://haveibeenpwned.com/",
+                chain_results.append({
+                    "site": "HIBP (Auto-Chain)",
+                    "url": "https://haveibeenpwned.com/",
                     "status": "FOUND", "confidence": 95,
                     "label": f"🔗 Email: {email} | ⚠ {len(breaches)} تسريب: {names}",
-                    "source": f"Chained from {source_site}"})
+                    "source": f"Chained from {source_site}",
+                })
+            elif r.status_code == 404:
+                chain_results.append({
+                    "site": "HIBP (Auto-Chain)",
+                    "url": "https://haveibeenpwned.com/",
+                    "status": "FOUND", "confidence": 90,
+                    "label": f"🔗 Email: {email} | ✅ لا تسريبات",
+                    "source": f"Chained from {source_site}",
+                })
         except Exception:
             pass
+
+    # Email Domain Info
     try:
         r = requests.get(f"https://dns.google/resolve?name={domain}&type=MX",
                          headers={"User-Agent": "OSINT-Platform"}, timeout=6)
@@ -404,15 +478,25 @@ def chain_email_intel(email, source_site):
             answers = r.json().get("Answer", [])
             if answers:
                 mx = answers[0].get("data","")
-                chain_results.append({"site": "Email Domain (Auto-Chain)",
-                    "url": f"https://who.is/whois/{domain}", "status": "FOUND", "confidence": 85,
-                    "label": f"🔗 Domain: {domain} | MX: {mx[:50]}", "source": f"Chained from {source_site}"})
+                chain_results.append({
+                    "site": "Email Domain (Auto-Chain)",
+                    "url": f"https://who.is/whois/{domain}",
+                    "status": "FOUND", "confidence": 85,
+                    "label": f"🔗 Domain: {domain} | MX: {mx[:50]}",
+                    "source": f"Chained from {source_site}",
+                })
     except Exception:
         pass
+
     return chain_results
 
+
+# ─────────────────────────────────────────
+# BUILD USERNAME RESULTS — متوازي + Chaining
+# ─────────────────────────────────────────
 def build_results(username):
     results_map = {}
+
     with ThreadPoolExecutor(max_workers=12) as executor:
         futures = {executor.submit(check_platform, p, username): p for p in SOCIAL_PLATFORMS}
         for future in as_completed(futures, timeout=20):
@@ -421,8 +505,13 @@ def build_results(username):
                 results_map[result["site"]] = result
             except Exception:
                 p = futures[future]
-                results_map[p["site"]] = {"site": p["site"], "url": p["url"].format(username),
-                    "status": "NOT FOUND", "confidence": 0, "label": "No Public Evidence Found", "source": "OSINT Direct"}
+                results_map[p["site"]] = {
+                    "site": p["site"], "url": p["url"].format(username),
+                    "status": "NOT FOUND", "confidence": 0,
+                    "label": "No Public Evidence Found", "source": "OSINT Direct",
+                }
+
+    # Email Chaining من GitHub
     chained = []
     github_result = results_map.get("GitHub", {})
     if github_result.get("status") == "FOUND":
@@ -430,13 +519,23 @@ def build_results(username):
         email_match = re.search(r"✉\s*([\w\.\-]+@[\w\.\-]+\.\w+)", label)
         if email_match:
             chained = chain_email_intel(email_match.group(1), "GitHub")
-    final = [results_map.get(p["site"], {"site": p["site"], "url": p["url"].format(username),
-        "status": "NOT FOUND", "confidence": 0, "label": "No Public Evidence Found", "source": "OSINT Direct"})
-        for p in SOCIAL_PLATFORMS]
+
+    # النتائج الأساسية + Chained
+    final = [results_map.get(p["site"], {
+        "site": p["site"], "url": p["url"].format(username),
+        "status": "NOT FOUND", "confidence": 0,
+        "label": "No Public Evidence Found", "source": "OSINT Direct",
+    }) for p in SOCIAL_PLATFORMS]
+
     if chained:
         final.extend(chained)
+
     return final
 
+
+# ─────────────────────────────────────────
+# أدوات مساعدة
+# ─────────────────────────────────────────
 def lookup_ip(ip):
     try:
         r = requests.get(f"https://ipapi.co/{ip}/json/", headers={"User-Agent": "OSINT-Platform"}, timeout=8)
@@ -537,6 +636,10 @@ def analyze_url(url):
     except Exception as e:
         return {"enabled": True, "title": "Error", "links": 0, "preview": str(e), "keywords": []}
 
+
+# ─────────────────────────────────────────
+# EMAIL RESULTS
+# ─────────────────────────────────────────
 def build_email_results(email):
     results = []
     if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email):
@@ -619,6 +722,10 @@ def build_email_results(email):
                         "status": "NOT FOUND", "confidence": 50, "label": "Add HIBP_API_KEY in .env for breach data"})
     return results
 
+
+# ─────────────────────────────────────────
+# PHONE RESULTS
+# ─────────────────────────────────────────
 def build_phone_results(phone):
     results = []
     clean = phone.replace(" ","").replace("-","").replace("(","").replace(")","")
@@ -655,6 +762,10 @@ def build_phone_results(phone):
         results.append({"site": "Gulf Directory", "url": "https://whitepages.ae/", "status": "FOUND", "confidence": 65, "label": f"Gulf directory — {country}"})
     return results
 
+
+# ─────────────────────────────────────────
+# DOMAIN RESULTS
+# ─────────────────────────────────────────
 def build_domain_results(domain):
     domain = re.sub(r"https?://", "", domain).replace("www.", "").strip().strip("/")
     results = []
@@ -684,7 +795,7 @@ def build_domain_results(domain):
         txt_records = dns_data["TXT"]
         spf   = next((t for t in txt_records if "v=spf"   in t.lower()), None)
         dmarc = next((t for t in txt_records if "v=dmarc" in t.lower()), None)
-        results.append({"site": "SPF Record", "url": "#",
+        results.append({"site": "SPF Record",   "url": "#",
                         "status": "FOUND" if spf else "NOT FOUND", "confidence": 88 if spf else 60,
                         "label": f"SPF: {spf[:70]}" if spf else "No SPF record — email spoofing possible ⚠"})
         results.append({"site": "DMARC Record", "url": "#",
@@ -721,123 +832,6 @@ def build_domain_results(domain):
     ]:
         results.append({"site": site, "url": url, "status": "FOUND", "confidence": conf, "label": label})
     return results
-
-
-# ─────────────────────────────────────────
-# IMAGE ANALYSIS
-# ─────────────────────────────────────────
-def get_exif_data(image_bytes):
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        exif_raw = img._getexif()
-        if not exif_raw:
-            return {}
-        return {TAGS.get(tag_id, tag_id): value for tag_id, value in exif_raw.items()}
-    except Exception:
-        return {}
-
-def get_gps_coords(exif_data):
-    gps_info = exif_data.get("GPSInfo")
-    if not gps_info:
-        return None
-    gps = {GPSTAGS.get(k, k): v for k, v in gps_info.items()}
-    def to_degrees(val):
-        d, m, s = val
-        return float(d) + float(m)/60 + float(s)/3600
-    try:
-        lat = to_degrees(gps["GPSLatitude"])
-        lon = to_degrees(gps["GPSLongitude"])
-        if gps.get("GPSLatitudeRef") == "S": lat = -lat
-        if gps.get("GPSLongitudeRef") == "W": lon = -lon
-        return {"lat": round(lat, 6), "lon": round(lon, 6)}
-    except Exception:
-        return None
-
-def reverse_geocode(lat, lon):
-    try:
-        r = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": lat, "lon": lon, "format": "json"},
-            headers={"User-Agent": "OSINT-Platform/1.0"},
-            timeout=8
-        )
-        if r.status_code == 200:
-            d = r.json()
-            addr = d.get("address", {})
-            return {
-                "display": d.get("display_name", ""),
-                "road":    addr.get("road", ""),
-                "city":    addr.get("city") or addr.get("town") or addr.get("village", ""),
-                "state":   addr.get("state", ""),
-                "country": addr.get("country", ""),
-                "postcode":addr.get("postcode", ""),
-                "country_code": addr.get("country_code", "").upper(),
-            }
-    except Exception:
-        pass
-    return {}
-
-def analyze_image(image_bytes, filename=""):
-    result = {
-        "filename": filename, "gps": None, "map_url": None, "location": {},
-        "camera": {}, "datetime": None, "dimensions": None,
-        "format": None, "size_kb": round(len(image_bytes)/1024, 1),
-        "ai_indicators": [], "ai_score": 0, "exif_found": False,
-    }
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        result["dimensions"] = f"{img.width} x {img.height}"
-        result["format"] = img.format or filename.split(".")[-1].upper()
-    except Exception:
-        pass
-    exif = get_exif_data(image_bytes)
-    if exif:
-        result["exif_found"] = True
-        coords = get_gps_coords(exif)
-        if coords:
-            result["gps"] = coords
-            result["map_url"] = f"https://maps.google.com/?q={coords['lat']},{coords['lon']}"
-            result["location"] = reverse_geocode(coords["lat"], coords["lon"])
-        for field in ["Make","Model","LensModel","Software"]:
-            if field in exif:
-                result["camera"][field] = str(exif[field])
-        for field in ["DateTimeOriginal","DateTime","DateTimeDigitized"]:
-            if field in exif:
-                result["datetime"] = str(exif[field])
-                break
-    indicators = []
-    ai_score = 0
-    if not exif:
-        indicators.append("No EXIF metadata (common in AI-generated images)")
-        ai_score += 30
-    software = str(exif.get("Software","")).lower()
-    for tool in ["stable diffusion","midjourney","dall-e","firefly","ai","generated"]:
-        if tool in software:
-            indicators.append(f"Software tag contains AI reference: {software}")
-            ai_score += 50
-            break
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        if img.width % 64 == 0 and img.height % 64 == 0:
-            indicators.append("Dimensions are multiples of 64 (common in AI models)")
-            ai_score += 15
-        if img.width == img.height:
-            indicators.append("Square dimensions (common AI output ratio)")
-            ai_score += 10
-    except Exception:
-        pass
-    result["ai_indicators"] = indicators
-    result["ai_score"] = min(ai_score, 95)
-    if ai_score >= 60:
-        result["ai_verdict"] = "LIKELY AI-GENERATED"
-        result["ai_verdict_color"] = "#ef4444"
-    elif ai_score >= 30:
-        result["ai_verdict"] = "POSSIBLY AI-GENERATED"
-        result["ai_verdict_color"] = "#f59e0b"
-    else:
-        result["ai_verdict"] = "LIKELY AUTHENTIC"
-        result["ai_verdict_color"] = "#22c55e"
-    return result
 
 
 # ─────────────────────────────────────────
@@ -916,6 +910,126 @@ def suggestions(q: str = ""):
             seen.append(s["target"])
     return {"results": seen[:5]}
 
+    # ─────────────────────────────────────────
+# IMAGE ANALYSIS
+# ─────────────────────────────────────────
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
+import io
+
+def get_exif_data(image_bytes):
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        exif_raw = img._getexif()
+        if not exif_raw:
+            return {}
+        return {TAGS.get(tag_id, tag_id): value for tag_id, value in exif_raw.items()}
+    except Exception:
+        return {}
+
+def get_gps_coords(exif_data):
+    gps_info = exif_data.get("GPSInfo")
+    if not gps_info:
+        return None
+    gps = {GPSTAGS.get(k, k): v for k, v in gps_info.items()}
+    def to_degrees(val):
+        d, m, s = val
+        return float(d) + float(m)/60 + float(s)/3600
+    try:
+        lat = to_degrees(gps["GPSLatitude"])
+        lon = to_degrees(gps["GPSLongitude"])
+        if gps.get("GPSLatitudeRef") == "S": lat = -lat
+        if gps.get("GPSLongitudeRef") == "W": lon = -lon
+        return {"lat": round(lat, 6), "lon": round(lon, 6)}
+    except Exception:
+        return None
+def reverse_geocode(lat, lon):
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json"},
+            headers={"User-Agent": "OSINT-Platform/1.0"},
+            timeout=8
+        )
+        if r.status_code == 200:
+            d = r.json()
+            addr = d.get("address", {})
+            return {
+                "display": d.get("display_name", ""),
+                "road":    addr.get("road", ""),
+                "city":    addr.get("city") or addr.get("town") or addr.get("village", ""),
+                "state":   addr.get("state", ""),
+                "country": addr.get("country", ""),
+                "postcode":addr.get("postcode", ""),
+                "country_code": addr.get("country_code", "").upper(),
+            }
+    except Exception:
+        pass
+    return {}
+def analyze_image(image_bytes, filename=""):
+    result = {
+        "filename": filename, "gps": None, "map_url": None,
+        "camera": {}, "datetime": None, "dimensions": None,
+        "format": None, "size_kb": round(len(image_bytes)/1024, 1),
+        "ai_indicators": [], "ai_score": 0, "exif_found": False,
+    }
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        result["dimensions"] = f"{img.width} × {img.height}"
+        result["format"] = img.format or filename.split(".")[-1].upper()
+    except Exception:
+        pass
+    exif = get_exif_data(image_bytes)
+    if exif:
+        result["exif_found"] = True
+        coords = get_gps_coords(exif)
+        if coords:
+            result["gps"] = coords
+            result["map_url"] = f"https://maps.google.com/?q={coords['lat']},{coords['lon']}"
+            result["location"] = reverse_geocode(coords["lat"], coords["lon"])
+        for field in ["Make","Model","LensModel","Software"]:
+            if field in exif:
+                result["camera"][field] = str(exif[field])
+        for field in ["DateTimeOriginal","DateTime","DateTimeDigitized"]:
+            if field in exif:
+                result["datetime"] = str(exif[field])
+                break
+    indicators = []
+    ai_score = 0
+    if not exif:
+        indicators.append("No EXIF metadata (common in AI-generated images)")
+        ai_score += 30
+    software = str(exif.get("Software","")).lower()
+    for tool in ["stable diffusion","midjourney","dall-e","firefly","ai","generated"]:
+        if tool in software:
+            indicators.append(f"Software tag contains AI reference: {software}")
+            ai_score += 50
+            break
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.width % 64 == 0 and img.height % 64 == 0:
+            indicators.append("Dimensions are multiples of 64 (common in AI models)")
+            ai_score += 15
+        if img.width == img.height:
+            indicators.append("Square dimensions (common AI output ratio)")
+            ai_score += 10
+    except Exception:
+        pass
+    result["ai_indicators"] = indicators
+    result["ai_score"] = min(ai_score, 95)
+    if ai_score >= 60:
+        result["ai_verdict"] = "LIKELY AI-GENERATED"
+        result["ai_verdict_color"] = "#ef4444"
+    elif ai_score >= 30:
+        result["ai_verdict"] = "POSSIBLY AI-GENERATED"
+        result["ai_verdict_color"] = "#f59e0b"
+    else:
+        result["ai_verdict"] = "LIKELY AUTHENTIC"
+        result["ai_verdict_color"] = "#22c55e"
+    return result
+
+from fastapi import UploadFile, File
+
 @app.get("/image-analysis", response_class=HTMLResponse)
 def image_analysis_page(request: Request):
     return templates.TemplateResponse(request=request, name="image_analysis.html",
@@ -938,132 +1052,3 @@ async def image_analysis_submit(request: Request, image: UploadFile = File(...))
     except Exception as e:
         return templates.TemplateResponse(request=request, name="image_analysis.html",
                                           context={"result": None, "error": str(e)})
-
-
-@app.get("/image-report")
-def image_report(request: Request, filename: str = "", lat: float = 0, lon: float = 0):
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.units import cm
-    from reportlab.lib.enums import TA_CENTER
-
-    W, H = A4
-    GENERATED = datetime.now().strftime("%d %B %Y")
-    TIME_UTC  = datetime.now().strftime("%H:%M UTC")
-    CASE_ID   = f"IMG-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    pdf_path  = REPORTS_DIR / f"image_report_{CASE_ID}.pdf"
-
-    BLACK=colors.HexColor("#000000"); DARK=colors.HexColor("#1a1a1a")
-    MID=colors.HexColor("#555555"); LIGHT=colors.HexColor("#888888")
-    LG=colors.HexColor("#f4f4f4"); LINE=colors.HexColor("#cccccc")
-    LD=colors.HexColor("#999999"); WHITE=colors.white
-    GREEN=colors.HexColor("#22c55e")
-
-    def draw_page(canv, doc):
-        canv.saveState()
-        canv.setFillColor(WHITE); canv.rect(0,0,W,H,fill=1,stroke=0)
-        canv.setFillColor(LG); canv.rect(0,H-42,W,42,fill=1,stroke=0)
-        canv.setFont("Helvetica-Bold",10); canv.setFillColor(BLACK)
-        canv.drawString(20,H-16,"OSINT PLATFORM")
-        canv.setFont("Helvetica",7); canv.setFillColor(LIGHT)
-        canv.drawString(20,H-28,"Image Intelligence Division")
-        canv.setFont("Helvetica-Bold",7.5); canv.setFillColor(BLACK)
-        canv.drawRightString(W-20,H-14,f"CASE NO: {CASE_ID}")
-        canv.setFont("Helvetica",7); canv.setFillColor(LIGHT)
-        canv.drawRightString(W-20,H-24,"CLASSIFICATION: CONFIDENTIAL")
-        canv.drawRightString(W-20,H-33,"FOR OFFICIAL USE ONLY")
-        canv.setFillColor(BLACK); canv.rect(0,H-44,W,2,fill=1,stroke=0)
-        canv.setFillColor(LG); canv.rect(0,0,W,34,fill=1,stroke=0)
-        canv.setFillColor(BLACK); canv.rect(0,34,W,2,fill=1,stroke=0)
-        canv.setFont("Helvetica",7); canv.setFillColor(MID)
-        canv.drawString(20,20,f"Generated: {GENERATED}  |  {TIME_UTC}  |  OSINT Intelligence Unit")
-        canv.setFont("Helvetica-Bold",7); canv.drawRightString(W-20,20,f"Page {doc.page}")
-        canv.restoreState()
-
-    base=getSampleStyleSheet()
-    def S(name,**kw):
-        s=base["Normal"].clone(name)
-        for k,v in kw.items(): setattr(s,k,v)
-        return s
-    s_title=S("t",fontName="Helvetica-Bold",fontSize=20,textColor=BLACK,alignment=TA_CENTER,spaceAfter=16)
-    s_sub=S("st",fontName="Helvetica",fontSize=9,textColor=MID,alignment=TA_CENTER)
-    s_sec=S("sc",fontName="Helvetica-Bold",fontSize=9.5,textColor=BLACK)
-    s_label=S("lb",fontName="Helvetica-Bold",fontSize=8,textColor=MID)
-    s_value=S("vl",fontName="Helvetica",fontSize=9,textColor=DARK,leading=16)
-    s_body=S("bd",fontName="Helvetica",fontSize=9,textColor=DARK,leading=20)
-    s_small=S("sm",fontName="Helvetica",fontSize=7.5,textColor=MID)
-
-    def hr(thick=0.5,before=4,after=8,c=None):
-        return HRFlowable(width="100%",thickness=thick,color=c or (LD if thick>=1 else LINE),spaceBefore=before,spaceAfter=after)
-
-    def section(num, title):
-        t=Table([[Paragraph(f"{num}.  {title.upper()}",s_sec)]],colWidths=[W-3.8*cm])
-        t.setStyle(TableStyle([("BACKGROUND",(0,0),(0,0),LG),("LEFTPADDING",(0,0),(0,0),12),
-            ("TOPPADDING",(0,0),(0,0),10),("BOTTOMPADDING",(0,0),(0,0),10),
-            ("LINEBEFORE",(0,0),(0,0),3,BLACK),("LINEBELOW",(0,0),(0,0),0.4,LINE)]))
-        return [Spacer(1,18),t,Spacer(1,12)]
-
-    # Reverse geocode if GPS available
-    location = {}
-    if lat and lon:
-        location = reverse_geocode(lat, lon)
-
-    doc=SimpleDocTemplate(str(pdf_path),pagesize=A4,
-        rightMargin=1.8*cm,leftMargin=1.8*cm,topMargin=2.8*cm,bottomMargin=1.8*cm,
-        title=f"Image Report - {filename}",author="OSINT Platform")
-
-    story=[]
-    story.append(Spacer(1,10))
-    story.append(Paragraph("IMAGE INTELLIGENCE REPORT",s_title))
-    story.append(Paragraph("EXIF Metadata Analysis  —  GPS Location  —  AI Detection",s_sub))
-    story.append(Spacer(1,26)); story.append(hr(1.5,0,18,BLACK))
-
-    # Meta
-    meta_rows=[
-        [Paragraph("CASE NUMBER",s_label),Paragraph(CASE_ID,s_value),Paragraph("FILE NAME",s_label),Paragraph(filename or "Unknown",s_value)],
-        [Paragraph("DATE GENERATED",s_label),Paragraph(GENERATED,s_value),Paragraph("ANALYST",s_label),Paragraph("OSINT Intelligence Unit",s_value)],
-    ]
-    mt=Table(meta_rows,colWidths=[3.6*cm,6.2*cm,3.2*cm,5.2*cm])
-    mt.setStyle(TableStyle([("BOX",(0,0),(-1,-1),1,BLACK),("LINEAFTER",(1,0),(1,-1),0.5,LD),
-        ("LINEBELOW",(0,0),(-1,-2),0.3,LINE),("TOPPADDING",(0,0),(-1,-1),14),
-        ("BOTTOMPADDING",(0,0),(-1,-1),14),("LEFTPADDING",(0,0),(-1,-1),12),
-        ("ROWBACKGROUNDS",(0,0),(-1,-1),[WHITE,LG])]))
-    story.append(mt)
-
-    # GPS Section
-    story+=section("1","GPS Location Analysis")
-    if lat and lon:
-        gps_rows=[
-            [Paragraph("COORDINATES",s_label),Paragraph(f"{lat}, {lon}",s_value),Paragraph("MAP LINK",s_label),Paragraph(f"https://maps.google.com/?q={lat},{lon}",s_value)],
-        ]
-        if location:
-            if location.get("road"):
-                gps_rows.append([Paragraph("ROAD",s_label),Paragraph(location.get("road",""),s_value),Paragraph("CITY",s_label),Paragraph(location.get("city",""),s_value)])
-            if location.get("state"):
-                gps_rows.append([Paragraph("STATE",s_label),Paragraph(location.get("state",""),s_value),Paragraph("COUNTRY",s_label),Paragraph(f"{location.get('country','')} ({location.get('country_code','')})",s_value)])
-            if location.get("postcode"):
-                gps_rows.append([Paragraph("POSTCODE",s_label),Paragraph(location.get("postcode",""),s_value),Paragraph("FULL ADDRESS",s_label),Paragraph(location.get("display","")[:60],s_value)])
-        gt=Table(gps_rows,colWidths=[3.6*cm,6.2*cm,3.2*cm,5.2*cm])
-        gt.setStyle(TableStyle([("BOX",(0,0),(-1,-1),1,GREEN),("LINEAFTER",(1,0),(1,-1),0.5,LD),
-            ("LINEBELOW",(0,0),(-1,-2),0.3,LINE),("TOPPADDING",(0,0),(-1,-1),12),
-            ("BOTTOMPADDING",(0,0),(-1,-1),12),("LEFTPADDING",(0,0),(-1,-1),12),
-            ("ROWBACKGROUNDS",(0,0),(-1,-1),[WHITE,LG,WHITE,LG])]))
-        story.append(gt)
-    else:
-        story.append(Paragraph("No GPS coordinates found in image EXIF data.",s_body))
-
-    # Conclusion
-    story+=section("2","Conclusion")
-    loc_summary = ""
-    if location:
-        loc_summary = f"Location identified as <b>{location.get('city','')}, {location.get('state','')}, {location.get('country','')}</b>. "
-    story.append(Paragraph(
-        f"Image analysis completed for <b>{filename}</b>. {loc_summary}"
-        f"Report generated by OSINT Platform Intelligence Unit.",s_body))
-    story.append(Spacer(1,16)); story.append(hr(0.4,2,8,LD))
-    story.append(Paragraph("DISCLAIMER: For authorized use only. OSINT Platform — Confidential.",s_small))
-
-    doc.build(story,onFirstPage=draw_page,onLaterPages=draw_page)
-    return FileResponse(str(pdf_path),media_type="application/pdf",filename=f"image_report_{filename}.pdf")

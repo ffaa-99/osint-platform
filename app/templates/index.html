@@ -5,60 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OSINT Platform</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --bg-deep:#000810;
-  --bg-side:#00040a;
-  --bg-card:#00080e;
-  --border-dim:#001828;
-  --border-faint:#001525;
-  --text-bright:#bae6fd;
-  --text-mid:#a8d8ee;
-  --text-accent:#56b8d8;
-  --text-muted:#003050;
-  --text-sep:#2a7d9c;
-  --line:#1a6a8a;
+  --font-sans:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+  --bg-deep:#000810; --bg-side:#00040a; --bg-card:#00080e;
+  --border-dim:#001828; --border-faint:#001525;
+  --text-bright:#bae6fd; --text-mid:#a8d8ee; --text-accent:#56b8d8;
+  --text-muted:#003050; --text-sep:#2a7d9c; --line:#1a6a8a;
   --btn-border:#0f4a62;
-  --mono:'Courier New',monospace;
   --green:#22c55e; --green-bg:rgba(34,197,94,.08); --green-bdr:rgba(34,197,94,.2);
-  --red:#ef4444;   --red-bg:rgba(239,68,68,.08);   --red-bdr:rgba(239,68,68,.2);
-  --accent:#56b8d8;
-  --bg2:#00080e; --bg3:#000c14;
-  --text:#a8d8ee; --text2:#56b8d8; --text3:#003050;
-  --border:#001525; --border-md:#001828;
-  --radius-lg:12px;
+  --red:#ef4444; --red-bg:rgba(239,68,68,.08); --red-bdr:rgba(239,68,68,.2);
 }
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg-deep);font-family:var(--font-sans);color:var(--text-mid);}
+
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-@keyframes fadein{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes fadein{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}
 @keyframes grow{0%{width:0}100%{width:var(--w,0%)}}
 @keyframes scan{0%{left:-35%}100%{left:115%}}
 @keyframes shimmer{0%,100%{opacity:.82}50%{opacity:1}}
 @keyframes glowline{0%,100%{opacity:.22}50%{opacity:.42}}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-@keyframes btnpulse{
-  0%,100%{box-shadow:0 0 0 0 rgba(14,165,212,0);border-color:#0f4a62}
-  50%{box-shadow:0 0 7px 1px rgba(14,165,212,.18);border-color:#1a6a8a}
-}
+@keyframes btnpulse{0%,100%{box-shadow:0 0 0 0 rgba(14,165,212,0);border-color:#0f4a62}50%{box-shadow:0 0 7px 1px rgba(14,165,212,.18);border-color:#1a6a8a}}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-serif;color:var(--text-mid);}
+/* LAYOUT */
+.layout{display:flex;height:100vh;overflow:hidden;}
 
-/* ── LAYOUT ── */
-.osint-layout{display:flex;height:100vh;overflow:hidden;}
-
-/* ── SIDEBAR ── */
+/* SIDEBAR */
 .sidebar{
-  width:220px;flex-shrink:0;
-  background:var(--bg-side);
-  padding:22px 12px;
-  display:flex;flex-direction:column;
-  position:relative;
-  border-right:0.5px solid var(--border-faint);
+  width:220px;flex-shrink:0;background:var(--bg-side);
+  padding:22px 12px;display:flex;flex-direction:column;
+  position:relative;border-right:0.5px solid var(--border-faint);
 }
 .sidebar::after{
-  content:'';position:absolute;top:8%;right:0;
-  width:1px;height:84%;
+  content:'';position:absolute;top:8%;right:0;width:1px;height:84%;
   background:linear-gradient(to bottom,transparent,#1e7a96 38%,#1e7a96 62%,transparent);
   opacity:.28;animation:glowline 4s ease-in-out infinite;
 }
@@ -67,18 +51,11 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
 .brand-text{display:flex;align-items:center;gap:6px;}
 .brand-name{color:var(--text-bright);font-size:18px;font-weight:500;letter-spacing:-.3px;}
 .brand-sep{width:1px;height:16px;background:var(--line);}
-.brand-sub{color:var(--text-sep);font-size:10px;letter-spacing:1.5px;font-family:var(--mono);}
-
-.nav-section{
-  display:block;color:var(--text-muted);
-  font-size:10px;letter-spacing:1.2px;
-  padding:0 6px 7px;margin-top:6px;
-}
+.brand-sub{color:var(--text-sep);font-size:10px;letter-spacing:1.5px;font-family:var(--font-mono);}
+.nav-section{display:block;color:var(--text-muted);font-size:10px;letter-spacing:1.2px;padding:0 6px 7px;margin-top:6px;}
 .nav-item{
-  display:flex;align-items:center;gap:9px;
-  padding:8px 12px;border-radius:8px;
-  cursor:pointer;transition:all .2s;
-  border:0.5px solid transparent;
+  display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;
+  cursor:pointer;transition:all .2s;border:0.5px solid transparent;
   color:var(--text-muted);font-size:12.5px;
 }
 .nav-item i{font-size:15px;color:var(--text-muted);}
@@ -88,190 +65,127 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
 .nav-item.active i{color:var(--text-accent);}
 .side-bottom{margin-top:auto;border-top:0.5px solid var(--border-faint);padding-top:12px;display:flex;flex-direction:column;gap:2px;}
 
-/* ── MAIN ── */
-.main-panel{
-  flex:1;background:var(--bg-deep);
-  padding:28px 32px;
-  display:flex;flex-direction:column;gap:22px;
-  overflow-y:auto;min-width:0;
-}
+/* MAIN */
+.main{flex:1;background:var(--bg-deep);padding:28px 32px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;min-width:0;}
 
-/* top bar */
+/* TOPBAR */
 .topbar{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .page-head-row{display:flex;align-items:center;gap:8px;}
-.page-title-main{font-size:28px;font-weight:500;color:var(--text-bright);letter-spacing:-.5px;}
+.page-title{font-size:28px;font-weight:500;color:var(--text-bright);letter-spacing:-.5px;}
 .page-vsep{width:1px;height:22px;background:var(--line);}
-.page-title-tag{font-size:13px;color:var(--text-sep);letter-spacing:2px;font-family:var(--mono);}
+.page-tag{font-size:13px;color:var(--text-sep);letter-spacing:2px;font-family:var(--font-mono);}
 .page-sub{color:var(--text-muted);font-size:11px;margin-top:3px;}
-.status-pill{
-  display:flex;align-items:center;gap:6px;
-  border:0.5px solid var(--border-dim);border-radius:20px;
-  padding:5px 14px;background:var(--bg-card);
-}
+.status-pill{display:flex;align-items:center;gap:6px;border:0.5px solid var(--border-dim);border-radius:20px;padding:5px 14px;background:var(--bg-card);}
 .status-dot{width:6px;height:6px;border-radius:50%;background:#0ea5d4;animation:pulse 2s infinite;}
 .status-text{color:var(--text-muted);font-size:11px;letter-spacing:.8px;}
 
-/* search module */
-.search-module{
-  background:var(--bg-card);border:0.5px solid var(--border-dim);
-  border-radius:12px;padding:18px 20px;flex-shrink:0;
-}
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0;}
+.sc{background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:10px;padding:16px;animation:fadein .35s ease both;}
+.sc-label{color:var(--text-muted);font-size:10px;letter-spacing:.8px;margin-bottom:8px;}
+.sc-val{color:var(--text-accent);font-size:22px;font-weight:500;}
+.sc-sub{color:var(--text-muted);font-size:11px;margin-top:4px;display:flex;align-items:center;gap:3px;}
+.sc-bar{background:#001525;height:2px;border-radius:2px;margin-top:10px;overflow:hidden;}
+.sc-fill{height:100%;border-radius:2px;animation:grow 1.1s ease both;}
+.gn{animation:shimmer 3.5s ease-in-out infinite;}
+.gn1{animation:shimmer 3.5s ease-in-out infinite .7s;}
+.gn2{animation:shimmer 3.5s ease-in-out infinite 1.4s;}
+.gn3{animation:shimmer 3.5s ease-in-out infinite 2.1s;}
+
+/* SEARCH */
+.search-module{background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:12px;padding:18px 20px;flex-shrink:0;}
 .search-types{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-.type-btn{
-  padding:5px 14px;border-radius:20px;font-size:12px;
-  cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .18s;
-  background:transparent;font-family:inherit;
-  color:var(--text-muted);border:0.5px solid #002030;
-}
+.type-btn{padding:5px 14px;border-radius:20px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .18s;background:transparent;font-family:var(--font-sans);color:var(--text-muted);border:0.5px solid #002030;}
 .type-btn:hover{color:var(--text-accent);border-color:var(--text-muted);}
-.type-btn.active{
-  color:var(--text-accent);border:0.5px solid var(--btn-border);
-  animation:btnpulse 2.8s ease-in-out infinite;font-weight:500;
-}
+.type-btn.active{color:var(--text-accent);border:0.5px solid var(--btn-border);animation:btnpulse 2.8s ease-in-out infinite;font-weight:500;}
 .search-row{display:flex;gap:10px;position:relative;}
 .search-row input[type=text]{
-  flex:1;background:var(--bg-deep);
-  border:0.5px solid #002030;border-radius:8px;
-  padding:10px 14px 10px 38px;font-size:13px;
-  font-family:var(--mono);color:var(--text-mid);
-  outline:none;transition:border-color .2s;
+  flex:1;background:var(--bg-deep);border:0.5px solid #002030;border-radius:8px;
+  padding:10px 14px 10px 38px;font-size:13px;font-family:var(--font-mono);
+  color:var(--text-mid);outline:none;transition:border-color .2s;
 }
-.search-row input[type=text]::placeholder{color:#2a5f74;}
-.search-row input[type=text]:focus{border-color:var(--line);}
-.search-icon-wrap{
-  position:absolute;left:12px;top:50%;transform:translateY(-50%);
-  color:var(--text-mid);font-size:14px;opacity:.7;pointer-events:none;
-}
+.search-row input::placeholder{color:#2a5f74;}
+.search-row input:focus{border-color:var(--line);}
+.search-icon-wrap{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-mid);font-size:14px;opacity:.7;pointer-events:none;}
 #search-btn{
-  background:transparent;color:var(--text-accent);
-  padding:10px 26px;border-radius:8px;
-  border:0.5px solid var(--btn-border);
-  font-size:13px;cursor:pointer;
-  display:flex;align-items:center;gap:7px;
-  font-weight:500;white-space:nowrap;
-  animation:btnpulse 2.8s ease-in-out infinite;
-  font-family:inherit;
+  background:transparent;color:var(--text-accent);padding:10px 26px;border-radius:8px;
+  border:0.5px solid var(--btn-border);font-size:13px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;font-weight:500;white-space:nowrap;
+  animation:btnpulse 2.8s ease-in-out infinite;font-family:var(--font-sans);
 }
 #search-btn.searching{opacity:.7;cursor:not-allowed;pointer-events:none;}
-#searching-msg{display:none;text-align:center;font-size:11px;letter-spacing:1.5px;color:var(--text-muted);margin-top:10px;font-family:var(--mono);}
+#searching-msg{display:none;text-align:center;font-size:11px;letter-spacing:1.5px;color:var(--text-muted);margin-top:10px;font-family:var(--font-mono);}
 #searching-msg.active{display:block;}
 
-/* scan status */
-.scan-status{
-  display:flex;align-items:center;gap:12px;flex-shrink:0;
-}
+/* SCAN LINE */
+.scan-status{display:flex;align-items:center;gap:12px;flex-shrink:0;}
 .scan-line{flex:1;height:1px;background:linear-gradient(to right,transparent,var(--line),transparent);opacity:.35;}
-#scan-text{font-size:10px;letter-spacing:1.5px;color:var(--text-muted);white-space:nowrap;font-family:var(--mono);}
+#scan-text{font-size:10px;letter-spacing:1.5px;color:var(--text-muted);white-space:nowrap;font-family:var(--font-mono);}
 
-/* intel bar */
-.intel-bar{
-  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
-  background:var(--bg-card);border:0.5px solid var(--border-dim);
-  border-radius:8px;padding:10px 16px;flex-shrink:0;
-}
-.intel-bar span{font-size:11px;letter-spacing:1px;color:var(--text-muted);font-family:var(--mono);}
+/* INTEL BAR */
+.intel-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:8px;padding:10px 16px;flex-shrink:0;}
+.intel-bar span{font-size:11px;letter-spacing:1px;color:var(--text-muted);font-family:var(--font-mono);}
 
-/* results summary */
-.results-summary{
-  display:flex;align-items:center;justify-content:space-between;
-  flex-wrap:wrap;gap:12px;flex-shrink:0;
-}
-.result-badge{
-  border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;
-  display:flex;align-items:center;gap:6px;
-}
+/* RESULTS */
+.results-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;flex-shrink:0;}
+.result-badge{border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;}
 .result-badge.found{background:var(--green-bg);border:1px solid var(--green-bdr);color:var(--green);}
 .result-badge.notfound{background:var(--red-bg);border:1px solid var(--red-bdr);color:var(--red);}
-.pdf-btn{
-  background:transparent;color:var(--text-accent);
-  padding:7px 18px;border-radius:8px;
-  border:0.5px solid var(--btn-border);
-  font-size:12px;cursor:pointer;text-decoration:none;
-  display:flex;align-items:center;gap:6px;
-  transition:all .2s;
-}
+.pdf-btn{background:transparent;color:var(--text-accent);padding:7px 18px;border-radius:8px;border:0.5px solid var(--btn-border);font-size:12px;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:6px;transition:all .2s;}
 .pdf-btn:hover{background:#001628;}
-
-/* results grid */
-.results-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
-  gap:12px;
-}
-.card{
-  background:var(--bg-card);border:0.5px solid var(--border-dim);
-  border-radius:10px;padding:16px;
-  transition:all .2s;animation:fadein .3s ease both;
-}
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.card{background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:10px;padding:16px;transition:all .2s;animation:fadein .3s ease both;}
 .card:hover{border-color:#002e48;background:#000c14;}
 .card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
 .card-top h3{font-size:13px;font-weight:500;color:var(--text-bright);}
-.badge-found{
-  font-size:10px;padding:2px 10px;border-radius:20px;
-  background:var(--green-bg);color:var(--green);border:0.5px solid var(--green-bdr);
-  font-family:var(--mono);letter-spacing:.5px;
-}
-.badge-notfound{
-  font-size:10px;padding:2px 10px;border-radius:20px;
-  background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-bdr);
-  font-family:var(--mono);letter-spacing:.5px;
-}
+.badge-found{font-size:10px;padding:2px 10px;border-radius:20px;background:var(--green-bg);color:var(--green);border:0.5px solid var(--green-bdr);font-family:var(--font-mono);letter-spacing:.5px;}
+.badge-notfound{font-size:10px;padding:2px 10px;border-radius:20px;background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-bdr);font-family:var(--font-mono);letter-spacing:.5px;}
 .conf-bar{background:#001525;height:2px;border-radius:2px;margin-bottom:8px;overflow:hidden;}
 .conf-fill{height:100%;border-radius:2px;background:var(--line);animation:grow 1s ease both .2s;}
 .confidence{font-size:11px;color:var(--text-muted);margin-bottom:10px;}
 .confidence strong{color:var(--text-accent)!important;font-weight:600;}
-.open-btn{
-  display:inline-flex;align-items:center;gap:5px;
-  font-size:11px;color:var(--text-accent);text-decoration:none;
-  border:0.5px solid var(--btn-border);border-radius:6px;
-  padding:4px 12px;transition:all .2s;
-}
+.open-btn{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-accent);text-decoration:none;border:0.5px solid var(--btn-border);border-radius:6px;padding:4px 12px;transition:all .2s;}
 .open-btn:hover{background:#001628;}
 .no-profile{font-size:11px;color:var(--text-muted);}
 
-/* URL report */
-.url-report{
-  background:var(--bg-card);border:0.5px solid var(--border-dim);
-  border-radius:12px;padding:20px;
-}
+/* RECENT ACTIVITY */
+.section-label{color:var(--text-muted);font-size:10px;letter-spacing:1.2px;margin-bottom:10px;}
+.rr{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:9px;border:0.5px solid var(--border-faint);background:var(--bg-card);animation:fadein .35s ease both;}
+.ico-pill{background:#001628;border:0.5px solid var(--btn-border);border-radius:20px;padding:5px 10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;animation:btnpulse 2.8s ease-in-out infinite;}
+.rr-badge{background:#001628;color:var(--text-accent);font-size:10px;padding:3px 10px;border-radius:20px;white-space:nowrap;letter-spacing:.5px;font-family:var(--font-mono);}
+
+/* URL REPORT */
+.url-report{background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:12px;padding:20px;}
 .url-report h3{font-size:14px;font-weight:500;color:var(--text-bright);margin-bottom:14px;}
 .url-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
-.url-cell{background:var(--bg3);border-radius:8px;padding:12px;}
-.url-cell-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:4px;font-family:var(--mono);}
+.url-cell{background:#000c14;border-radius:8px;padding:12px;}
+.url-cell-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:4px;font-family:var(--font-mono);}
 .url-cell-val{font-size:14px;color:var(--text-mid);}
 .url-cell-val.big{font-size:22px;font-weight:600;color:var(--text-accent);}
-.kw-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
-.kw-tag{font-size:11px;background:var(--bg3);color:var(--text2);padding:3px 10px;border-radius:999px;border:0.5px solid var(--border);}
-.url-preview{font-size:12px;color:var(--text-muted);line-height:1.7;background:var(--bg3);border-radius:8px;padding:12px;max-height:100px;overflow:hidden;}
+.kw-tag{font-size:11px;background:#000c14;color:var(--text-accent);padding:3px 10px;border-radius:999px;border:0.5px solid var(--border-faint);}
+.url-preview{font-size:12px;color:var(--text-muted);line-height:1.7;background:#000c14;border-radius:8px;padding:12px;max-height:100px;overflow:hidden;}
 
-/* suggestions */
-#suggestions-box{
-  display:none;position:absolute;top:calc(100% + 4px);left:0;width:100%;
-  z-index:999;background:var(--bg2);
-  border:0.5px solid var(--border-md);border-radius:10px;
-  padding:6px 0;box-sizing:border-box;
-}
-.sug-label{font-size:10px;letter-spacing:1.5px;color:var(--text-muted);padding:4px 14px 6px;font-family:var(--mono);}
+/* SUGGESTIONS */
+#suggestions-box{display:none;position:absolute;top:calc(100% + 4px);left:0;width:100%;z-index:999;background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:10px;padding:6px 0;}
+.sug-label{font-size:10px;letter-spacing:1.5px;color:var(--text-muted);padding:4px 14px 6px;font-family:var(--font-mono);}
 .sug-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .15s;}
-.sug-item:hover{background:var(--bg3);}
-.sug-icon{width:28px;height:28px;border-radius:7px;background:var(--bg3);color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.sug-item:hover{background:#000c14;}
+.sug-icon{width:28px;height:28px;border-radius:7px;background:#000c14;color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
 .sug-text{font-size:13px;color:var(--text-mid);}
 .sug-sub{font-size:11px;color:var(--text-muted);margin-top:1px;}
-.sug-clear{font-size:11px;color:var(--text-muted);padding:6px 14px 2px;text-align:right;cursor:pointer;border-top:0.5px solid var(--border);margin-top:4px;}
+.sug-clear{font-size:11px;color:var(--text-muted);padding:6px 14px 2px;text-align:right;cursor:pointer;border-top:0.5px solid var(--border-faint);margin-top:4px;}
 .sug-clear:hover{color:var(--text-accent);}
-
-/* spinner */
 .fa-spin{animation:spin .8s linear infinite;display:inline-block;}
 
 @media(max-width:768px){
   .sidebar{display:none;}
-  .main-panel{padding:16px;}
+  .main{padding:16px;}
   .stats-grid{grid-template-columns:1fr 1fr;}
 }
 </style>
 </head>
 <body>
-<div class="osint-layout">
+<div class="layout">
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
@@ -283,19 +197,16 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
         <span class="brand-sub">PLATFORM</span>
       </div>
     </div>
-
     <span class="nav-section">MAIN</span>
     <div class="nav-item active"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
     <div class="nav-item"><i class="ti ti-user-search"></i> Username Search</div>
     <div class="nav-item"><i class="ti ti-link"></i> URL Analyzer</div>
     <div class="nav-item"><i class="ti ti-share"></i> Social Search</div>
     <div class="nav-item" onclick="location.href='/saved'"><i class="ti ti-bookmark"></i> Saved Results</div>
-
     <span class="nav-section">SYSTEM</span>
     <div class="nav-item"><i class="ti ti-file-analytics"></i> Reports</div>
     <div class="nav-item"><i class="ti ti-bell"></i> Alerts</div>
     <div class="nav-item"><i class="ti ti-code"></i> API Access</div>
-
     <div class="side-bottom">
       <div class="nav-item"><i class="ti ti-settings"></i> Settings</div>
       <div class="nav-item"><i class="ti ti-help-circle"></i> Help Center</div>
@@ -303,15 +214,15 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
   </aside>
 
   <!-- MAIN -->
-  <main class="main-panel">
+  <main class="main">
 
-    <!-- Top Bar -->
+    <!-- TOPBAR -->
     <div class="topbar">
       <div>
         <div class="page-head-row">
-          <div class="page-title-main">OSINT</div>
+          <div class="page-title">OSINT</div>
           <div class="page-vsep"></div>
-          <div class="page-title-tag">PLATFORM</div>
+          <div class="page-tag">PLATFORM</div>
         </div>
         <div class="page-sub">Intelligence · Social Search · URL Analyzer</div>
       </div>
@@ -321,7 +232,35 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
       </div>
     </div>
 
-    <!-- Search Form -->
+    <!-- STATS -->
+    <div class="stats-grid">
+      <div class="sc" style="animation-delay:.05s;">
+        <div class="sc-label">SEARCHES</div>
+        <div class="sc-val gn">{{ stats.total if stats else '0' }}</div>
+        <div class="sc-sub"><i class="ti ti-trending-up" style="font-size:12px;"></i> today</div>
+        <div class="sc-bar"><div class="sc-fill" style="--w:72%;background:#1a6a8a;animation-delay:.3s;"></div></div>
+      </div>
+      <div class="sc" style="animation-delay:.1s;">
+        <div class="sc-label">FOUND</div>
+        <div class="sc-val gn1">{{ stats.found if stats else '0' }}</div>
+        <div class="sc-sub">results</div>
+        <div class="sc-bar"><div class="sc-fill" style="--w:87%;background:#0ea5d4;animation-delay:.4s;"></div></div>
+      </div>
+      <div class="sc" style="animation-delay:.15s;">
+        <div class="sc-label">TARGETS</div>
+        <div class="sc-val gn2">{{ stats.targets if stats else '0' }}</div>
+        <div class="sc-sub">unique</div>
+        <div class="sc-bar"><div class="sc-fill" style="--w:55%;background:#155e78;animation-delay:.5s;"></div></div>
+      </div>
+      <div class="sc" style="animation-delay:.2s;">
+        <div class="sc-label">ACCURACY</div>
+        <div class="sc-val gn3">87%</div>
+        <div class="sc-sub">avg</div>
+        <div class="sc-bar"><div class="sc-fill" style="--w:87%;background:#56b8d8;animation-delay:.6s;"></div></div>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
     <form method="post" action="/" class="search-module" id="search-form">
       <input type="hidden" id="search_type" name="search_type" value="username">
       <div class="search-types">
@@ -338,7 +277,7 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
           <i class="ti ti-world" style="font-size:12px;"></i> Domain
         </button>
       </div>
-      <div class="search-row" style="position:relative;">
+      <div class="search-row">
         <i class="ti ti-search search-icon-wrap"></i>
         <input type="text" name="username" id="search-input" placeholder="Enter target..." required autocomplete="off">
         <button id="search-btn" type="submit">
@@ -350,14 +289,14 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
       <div id="searching-msg">SCANNING PLATFORMS...</div>
     </form>
 
-    <!-- Scan Status -->
+    <!-- SCAN LINE -->
     <div class="scan-status">
       <div class="scan-line"></div>
       <span id="scan-text">ANALYZING DIGITAL FOOTPRINT...</span>
       <div class="scan-line"></div>
     </div>
 
-    <!-- Intel Bar -->
+    <!-- INTEL BAR -->
     {% if username %}
     <div class="intel-bar">
       <span>⬤ ENGINE: ACTIVE</span>
@@ -366,16 +305,12 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
     </div>
     {% endif %}
 
-    <!-- Results -->
+    <!-- RESULTS -->
     {% if results %}
     <div class="results-summary">
       <div style="display:flex;gap:10px;">
-        <div class="result-badge found">
-          <i class="ti ti-circle-check"></i> {{ found_count }} Found
-        </div>
-        <div class="result-badge notfound">
-          <i class="ti ti-circle-x"></i> {{ notfound_count }} Not Found
-        </div>
+        <div class="result-badge found"><i class="ti ti-circle-check"></i> {{ found_count }} Found</div>
+        <div class="result-badge notfound"><i class="ti ti-circle-x"></i> {{ notfound_count }} Not Found</div>
       </div>
       <a class="pdf-btn" href="/report?target={{ username }}&search_type={{ search_type }}" target="_blank">
         <i class="ti ti-file-export" style="font-size:13px;"></i> Export PDF Report
@@ -388,49 +323,56 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
           <h3>{{ item.site }}</h3>
           <span class="{% if item.status == 'FOUND' %}badge-found{% else %}badge-notfound{% endif %}">{{ item.status }}</span>
         </div>
-        <div class="conf-bar">
-          <div class="conf-fill" style="--w:{{ item.confidence }}%;"></div>
-        </div>
+        <div class="conf-bar"><div class="conf-fill" style="--w:{{ item.confidence }}%;"></div></div>
         <p class="confidence"><strong>{{ item.confidence }}%</strong> confidence — {{ item.label }}</p>
         {% if item.url != "#" and item.status == "FOUND" %}
-          <a href="{{ item.url }}" class="open-btn" target="_blank">
-            <i class="ti ti-external-link" style="font-size:11px;"></i> Open Profile
-          </a>
+          <a href="{{ item.url }}" class="open-btn" target="_blank"><i class="ti ti-external-link" style="font-size:11px;"></i> Open Profile</a>
         {% else %}
           <span class="no-profile">No external profile</span>
         {% endif %}
       </div>
       {% endfor %}
     </div>
+
+    <!-- RECENT ACTIVITY -->
+    {% else %}
+    <div>
+      <div class="section-label">RECENT ACTIVITY</div>
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        {% for s in recent_searches %}
+        <div class="rr">
+          <div class="ico-pill"><i class="ti ti-{{ 'mail' if s.search_type == 'email' else 'user' }}" style="color:#a8d8ee;font-size:14px;opacity:.75;"></i></div>
+          <div style="flex:1;min-width:0;">
+            <div style="color:#56b8d8;font-size:12.5px;font-weight:500;font-family:var(--font-mono);">{{ s.target }}</div>
+            <div style="color:#003050;font-size:11px;margin-top:1px;">{{ s.search_type }} · {{ s.date }}</div>
+          </div>
+          <div class="rr-badge">{{ s.found_count }} FOUND</div>
+        </div>
+        {% else %}
+        <div class="rr">
+          <div class="ico-pill"><i class="ti ti-history" style="color:#a8d8ee;font-size:14px;opacity:.75;"></i></div>
+          <div style="flex:1;"><div style="color:#003050;font-size:12px;font-family:var(--font-mono);">No recent searches</div></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
     {% endif %}
 
-    <!-- URL Report -->
+    <!-- URL REPORT -->
     {% if report and report.enabled %}
     <div class="url-report">
       <h3><i class="ti ti-link" style="color:var(--text-accent);margin-right:8px;"></i>URL Analysis</h3>
       <div class="url-grid">
-        <div class="url-cell">
-          <div class="url-cell-label">PAGE TITLE</div>
-          <div class="url-cell-val">{{ report.title }}</div>
-        </div>
-        <div class="url-cell">
-          <div class="url-cell-label">LINKS FOUND</div>
-          <div class="url-cell-val big">{{ report.links }}</div>
-        </div>
+        <div class="url-cell"><div class="url-cell-label">PAGE TITLE</div><div class="url-cell-val">{{ report.title }}</div></div>
+        <div class="url-cell"><div class="url-cell-label">LINKS FOUND</div><div class="url-cell-val big">{{ report.links }}</div></div>
       </div>
       {% if report.keywords %}
       <div style="margin-bottom:10px;">
         <div class="url-cell-label" style="margin-bottom:8px;">KEYWORDS</div>
-        <div class="kw-row">
-          {% for kw in report.keywords %}
-          <span class="kw-tag">{{ kw }}</span>
-          {% endfor %}
-        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">{% for kw in report.keywords %}<span class="kw-tag">{{ kw }}</span>{% endfor %}</div>
       </div>
       {% endif %}
-      {% if report.preview %}
-      <div class="url-preview">{{ report.preview }}</div>
-      {% endif %}
+      {% if report.preview %}<div class="url-preview">{{ report.preview }}</div>{% endif %}
     </div>
     {% endif %}
 
@@ -438,11 +380,11 @@ html,body{height:100%;background:var(--bg-deep);font-family:'Segoe UI',sans-seri
 </div>
 
 <script>
-const scanMessages = {
+const scanMessages={
   username:["SCANNING SOCIAL PLATFORMS...","VERIFYING USERNAME SIGNALS...","ANALYZING DIGITAL FOOTPRINT...","BUILDING INTELLIGENCE VIEW..."],
-  email:   ["VALIDATING EMAIL STRUCTURE...","CHECKING EMAIL DOMAIN...","ANALYZING EMAIL INTELLIGENCE...","BUILDING EMAIL REPORT..."],
-  phone:   ["VALIDATING PHONE FORMAT...","CHECKING COUNTRY CODE...","ANALYZING PHONE INTELLIGENCE...","BUILDING PHONE REPORT..."],
-  domain:  ["VALIDATING DOMAIN STRUCTURE...","CHECKING DNS RECORDS...","SCANNING DOMAIN INTELLIGENCE...","BUILDING DOMAIN REPORT..."]
+  email:["VALIDATING EMAIL STRUCTURE...","CHECKING EMAIL DOMAIN...","ANALYZING EMAIL INTELLIGENCE...","BUILDING EMAIL REPORT..."],
+  phone:["VALIDATING PHONE FORMAT...","CHECKING COUNTRY CODE...","ANALYZING PHONE INTELLIGENCE...","BUILDING PHONE REPORT..."],
+  domain:["VALIDATING DOMAIN STRUCTURE...","CHECKING DNS RECORDS...","SCANNING DOMAIN INTELLIGENCE...","BUILDING DOMAIN REPORT..."]
 };
 let idx=0;
 const scanText=document.getElementById('scan-text');
@@ -464,11 +406,9 @@ function setType(btn,type){
   if(inp)inp.placeholder=ph[type]||'Enter target...';
 }
 
-// Recent Searches
 const STORAGE_KEY='osint_recent';
 const sugInput=document.getElementById('search-input');
 const sugBox=document.getElementById('suggestions-box');
-
 function getRecent(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[];}catch{return[];}}
 function saveRecent(val){let l=getRecent().filter(x=>x.value!==val);l.unshift({value:val,date:Date.now()});l=l.slice(0,5);localStorage.setItem(STORAGE_KEY,JSON.stringify(l));}
 function clearRecent(){localStorage.removeItem(STORAGE_KEY);sugBox.style.display='none';}
@@ -476,8 +416,7 @@ function timeAgo(ts){const d=Math.floor((Date.now()-ts)/86400000);if(d===0)retur
 function showRecent(){
   const list=getRecent();
   if(!list.length){sugBox.style.display='none';return;}
-  sugBox.innerHTML=
-    '<div class="sug-label">RECENT</div>'+
+  sugBox.innerHTML='<div class="sug-label">RECENT</div>'+
     list.map(r=>`<div class="sug-item" onclick="pickRecent('${r.value.replace(/'/g,"\\'")}')">
       <div class="sug-icon"><i class="ti ti-clock-hour-4"></i></div>
       <div><div class="sug-text">${r.value}</div><div class="sug-sub">${timeAgo(r.date)}</div></div>
@@ -486,13 +425,9 @@ function showRecent(){
   sugBox.style.display='block';
 }
 function pickRecent(val){sugInput.value=val;sugBox.style.display='none';}
-
 sugInput.addEventListener('focus',showRecent);
-document.addEventListener('click',function(e){
-  if(!sugBox.contains(e.target)&&e.target!==sugInput)sugBox.style.display='none';
-});
+document.addEventListener('click',function(e){if(!sugBox.contains(e.target)&&e.target!==sugInput)sugBox.style.display='none';});
 
-// Form Submit
 document.getElementById('search-form').addEventListener('submit',function(){
   const t=sugInput.value.trim();
   if(!t)return;
@@ -503,7 +438,6 @@ document.getElementById('search-form').addEventListener('submit',function(){
   document.getElementById('searching-msg').classList.add('active');
 });
 
-// Nav active state
 document.querySelectorAll('.nav-item').forEach(item=>{
   item.addEventListener('click',function(){
     if(!this.getAttribute('onclick')){
